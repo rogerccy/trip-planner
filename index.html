@@ -113,7 +113,7 @@
     .tl-stop.dragging { opacity: 0.3; }
     .tl-stop.drop-before { border-top: 2px solid var(--accent); }
     .tl-stop.drop-after  { border-bottom: 2px solid var(--accent); }
-    .tl-stop.hotel-stop  { cursor: default; }
+    .tl-stop.hotel-stop  { cursor: pointer; }
 
     .tl-left { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
     .tl-drag { font-size: 12px; color: var(--muted2); cursor: grab; user-select: none; line-height: 1; margin-bottom: 3px; }
@@ -255,16 +255,19 @@
     .hotel-search:focus { border-color: var(--accent); border-style: solid; }
     .hotel-search::placeholder { color: var(--muted); }
     .hotel-card {
-      background: var(--surface2); border-radius: var(--radius); padding: 10px 10px 8px;
-      margin-bottom: 8px; border: 1px solid var(--muted2);
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 4px; border-radius: 6px; cursor: pointer;
+      border: 1px solid transparent; transition: background 0.1s, border-color 0.1s;
+      margin-bottom: 2px;
     }
-    .hotel-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; display: flex; align-items: center; gap: 5px; }
-    .hotel-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 2px; margin-left: auto; }
-    .hotel-del:hover { color: var(--danger); }
-    .hotel-addr { font-size: 11px; color: var(--sub); margin-bottom: 4px; }
-    .hotel-phone { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
-    .hotel-nights { margin-bottom: 6px; }
-    .hotel-nights-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .hotel-card:hover { background: rgba(255,255,255,0.025); }
+    .hotel-card.selected { background: rgba(255,255,255,0.06); border-color: var(--muted2); }
+    .hotel-card-name { font-size: 13px; font-weight: 500; color: var(--text); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hotel-card-nights { font-size: 11px; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+    .hotel-card-actions { display: none; align-items: center; flex-shrink: 0; }
+    .hotel-card:hover .hotel-card-actions { display: flex; }
+    .hotel-nights { margin-bottom: 10px; }
+    .hotel-nights-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
     .nights-row { display: flex; gap: 4px; flex-wrap: wrap; }
     .night-btn {
       background: var(--surface3); border: 1px solid var(--muted2); color: var(--muted);
@@ -364,7 +367,10 @@
     .panel-back { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 20px; line-height: 1; padding: 0 2px; }
     .panel-back:hover { color: var(--text); }
     .panel-title { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .panel-body { padding: 14px 12px; flex: 1; overflow-y: auto; }
+    .panel-body { padding: 14px 12px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+    .panel-footer { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--muted2); }
+    .panel-del-btn { display: flex; align-items: center; gap: 5px; background: none; border: none; color: var(--danger); font-size: 12px; cursor: pointer; padding: 6px 4px; border-radius: 4px; width: 100%; }
+    .panel-del-btn:hover { background: rgba(255,80,80,0.08); }
     .panel-section { margin-bottom: 16px; }
     .panel-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
     .panel-addr { font-size: 12px; color: var(--sub); line-height: 1.5; }
@@ -642,9 +648,10 @@ function boot() {
   const raw = localStorage.getItem('tp_data')
   if (raw) try { DATA = JSON.parse(raw) } catch(e) {}
 
-  // Ensure all trips have hotels array; rebuild derived caches for days with saved _legs
+  // Ensure all trips have hotels array; migrate stale night index 0 (old 0-based scheme); rebuild derived caches
   for (const t of DATA.trips) {
     if (!t.hotels) t.hotels = []
+    for (const h of t.hotels) h.nights = h.nights.filter(n => n > 0)
     for (const [di, day] of t.days.entries()) {
       if (day._legs) {
         day._eff = getEffectiveStops(day, di, t)
@@ -670,6 +677,9 @@ function switchTab(tab) {
   sb.classList.toggle('hotels-tab', tab === 'hotels')
   $('footer-btn').textContent = tab === 'itin' ? '+ Add Day' : '+ Add Hotel'
   $('footer-btn').onclick = tab === 'itin' ? addDay : showHotelSearch
+  // Close panel if it belongs to the other tab
+  if (tab === 'hotels' && selectedPanel?.type !== 'hotel') closePanel()
+  if (tab === 'itin' && selectedPanel?.type === 'hotel') closePanel()
 }
 
 function showHotelSearch() {
@@ -836,6 +846,13 @@ function selectStop(dayId, stopId) {
   renderSidebar(); renderDetailPanel()
 }
 
+function selectHotel(hotelId) {
+  const key = `hotel:${hotelId}`
+  if (selectedPanel?.key === key) { closePanel(); return }
+  selectedPanel = { type: 'hotel', key, hotelId }
+  renderSidebar(); renderDetailPanel()
+}
+
 function selectLeg(dayId, legIdx) {
   const key = `leg:${dayId}:${legIdx}`
   if (selectedPanel?.key === key) { closePanel(); return }
@@ -900,6 +917,46 @@ function renderDetailPanel() {
           <textarea class="stop-note" placeholder="Add notes…"
             onchange="setStopNote('${day.id}','${stop.id}',this.value)"
             onblur="setStopNote('${day.id}','${stop.id}',this.value)">${esc(stop.note || '')}</textarea>
+        </div>
+      </div>`
+
+  } else if (selectedPanel.type === 'hotel') {
+    const { hotelId } = selectedPanel
+    const hotel = (t.hotels || []).find(h => h.id === hotelId); if (!hotel) return
+    const dayCount = t.days.length
+    const nightBtns = dayCount > 1
+      ? Array.from({ length: dayCount - 1 }, (_, i) => {
+          const nightIdx = i + 1
+          const on = hotel.nights.includes(nightIdx)
+          return `<button class="night-btn ${on ? 'on' : ''}" onclick="toggleNight('${hotel.id}',${nightIdx})" title="Night between Day ${nightIdx} and Day ${nightIdx + 1}">${nightIdx}</button>`
+        }).join('')
+      : '<span style="color:var(--muted);font-size:11px">Add at least 2 days first</span>'
+    inner.innerHTML = `
+      <div class="panel-header">
+        <button class="panel-back" onclick="closePanel()"><span class="material-icons" style="font-size:20px">arrow_back</span></button>
+        <div class="panel-title">${mi('hotel','15px')} ${esc(hotel.name)}</div>
+      </div>
+      <div class="panel-body">
+        ${hotel.address ? `<div class="panel-section">
+          <div class="panel-label">Location</div>
+          <div class="panel-addr">${mi('location_on','14px')} ${esc(hotel.address)}</div>
+        </div>` : ''}
+        ${hotel.phone ? `<div class="panel-section">
+          <div class="panel-label">Phone</div>
+          <div class="panel-addr">${mi('phone','14px')} ${esc(hotel.phone)}</div>
+        </div>` : ''}
+        <div class="panel-section">
+          <div class="panel-label">Stay which nights?</div>
+          <div class="nights-row">${nightBtns}</div>
+        </div>
+        <div class="panel-section">
+          <div class="panel-label">Notes</div>
+          <textarea class="stop-note" placeholder="Add notes…"
+            onchange="setHotelNote('${hotel.id}',this.value)"
+            onblur="setHotelNote('${hotel.id}',this.value)">${esc(hotel.note || '')}</textarea>
+        </div>
+        <div class="panel-footer">
+          <button class="panel-del-btn" onclick="removeHotel('${hotel.id}')">${mi('delete_outline','15px')} Delete hotel</button>
         </div>
       </div>`
 
@@ -1016,6 +1073,7 @@ function removeHotel(hotelId) {
   t.hotels = (t.hotels || []).filter(h => h.id !== hotelId)
   // Recalc all days since hotel injection changes
   for (const day of t.days) { day._legs = null }
+  closePanel()
   renderHotels(); renderSidebar(); renderMap(); scheduleSave()
 }
 
@@ -1036,7 +1094,7 @@ function toggleNight(hotelId, nightIdx) {
   for (const [di, day] of t.days.entries()) {
     if (day._eff) { day._eff = null; day._legs = null }
   }
-  renderSidebar(); renderHotels(); renderMap(); scheduleSave()
+  renderSidebar(); renderHotels(); renderDetailPanel(); renderMap(); scheduleSave()
   // Recalc all days (hotel injection affects routes)
   for (const [di, day] of t.days.entries()) recalcDay(day, t)
 }
@@ -1053,7 +1111,7 @@ function setHotelLegMode(hotelId, mode) {
   hotel.legMode = mode
   // Recalc days where hotel is injected
   for (const [di, day] of t.days.entries()) {
-    if (hotel.nights.includes(di - 1) || hotel.nights.includes(di)) {
+    if (hotel.nights.includes(di) || hotel.nights.includes(di + 1)) {
       day._legs = null; recalcDay(day, t)
     }
   }
@@ -1407,10 +1465,11 @@ function renderSidebar() {
       const hoursPill = status !== 'unknown'
         ? `<span class="hi-pill ${status}">${status === 'open' ? '✓' : '✕'}</span>` : ''
       const isStopSelected = !isVirtual && selectedPanel?.type === 'stop' && selectedPanel?.stopId === stop.id
+      const isHotelSelected = isVirtual && selectedPanel?.type === 'hotel' && selectedPanel?.hotelId === stop._hotelId
 
       // Stop row — flat single-line layout
       const stopRow = isVirtual ? `
-        <div class="tl-stop hotel-stop">
+        <div class="tl-stop hotel-stop ${isHotelSelected ? 'selected' : ''}" style="cursor:pointer" onclick="selectHotel('${stop._hotelId}')">
           <div class="tl-dot" style="background:${color}">H</div>
           ${timeRange ? `<span class="tl-time-chip" style="color:${color};background:${color}26">${timeRange}</span>` : ''}
           <span class="tl-name">${mi('hotel','14px')} ${esc(stop.name)}</span>
@@ -1508,29 +1567,17 @@ function renderHotels() {
   const dayCount = t.days.length
 
   const hotelsHtml = hotels.map(h => {
-    const nightBtns = dayCount > 1
-      ? Array.from({ length: dayCount - 1 }, (_, i) => {
-          const nightIdx = i + 1  // Night k = between Day k and Day k+1
-          const on = h.nights.includes(nightIdx)
-          return `<button class="night-btn ${on ? 'on' : ''}" onclick="toggleNight('${h.id}',${nightIdx})" title="Night between Day ${nightIdx} and Day ${nightIdx + 1}">${nightIdx}</button>`
-        }).join('')
-      : '<span style="color:var(--muted);font-size:11px">Add at least 2 days first</span>'
-
+    const isSelected = selectedPanel?.type === 'hotel' && selectedPanel?.hotelId === h.id
+    const validNights = h.nights.filter(n => n > 0).sort((a,b)=>a-b)
+    const nightsSummary = validNights.length ? `N${validNights.join(',')}` : ''
     return `
-      <div class="hotel-card">
-        <div class="hotel-name">
-          ${mi('hotel','15px')} ${esc(h.name)}
-          <button class="hotel-del" onclick="removeHotel('${h.id}')"><span class="material-icons" style="font-size:16px">close</span></button>
+      <div class="hotel-card ${isSelected ? 'selected' : ''}" onclick="selectHotel('${h.id}')">
+        <span class="material-icons" style="font-size:15px;color:var(--muted);flex-shrink:0">hotel</span>
+        <span class="hotel-card-name">${esc(h.name)}</span>
+        ${nightsSummary ? `<span class="hotel-card-nights">${nightsSummary}</span>` : ''}
+        <div class="hotel-card-actions" onclick="event.stopPropagation()">
+          <button class="tl-act-btn danger" title="Delete hotel" onclick="removeHotel('${h.id}')">${mi('delete_outline','14px')}</button>
         </div>
-        ${h.address ? `<div class="hotel-addr">${mi('location_on','13px')} ${esc(h.address)}</div>` : ''}
-        ${h.phone   ? `<div class="hotel-phone">${mi('phone','13px')} ${esc(h.phone)}</div>` : ''}
-        <div class="hotel-nights">
-          <div class="hotel-nights-label">Stay which nights?</div>
-          <div class="nights-row">${nightBtns}</div>
-        </div>
-        <textarea class="hotel-note" placeholder="Note…"
-          onchange="setHotelNote('${h.id}',this.value)"
-          onblur="setHotelNote('${h.id}',this.value)">${esc(h.note || '')}</textarea>
       </div>`
   }).join('')
 
