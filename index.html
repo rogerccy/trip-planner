@@ -124,7 +124,7 @@
     }
     .tl-content { flex: 1; min-width: 0; cursor: pointer; }
     .tl-header { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
-    .tl-time-range { font-size: 11px; font-weight: 700; color: var(--accent); white-space: nowrap; flex-shrink: 0; }
+    .tl-time-chip { font-size: 11px; font-weight: 600; white-space: nowrap; flex-shrink: 0; padding: 1px 7px; border-radius: 4px; font-variant-numeric: tabular-nums; }
     .tl-name { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tl-addr { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tl-actions { display: flex; gap: 1px; flex-shrink: 0; position: relative; align-self: flex-start; margin-top: 2px; }
@@ -160,12 +160,11 @@
     }
     .stop-note:focus { border-color: var(--accent); }
 
-    /* ── Leg badge (between stops) ── */
-    .tl-leg { padding: 3px 0 3px 30px; cursor: pointer; }
-    .tl-leg-inner { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 10px; font-size: 11px; color: var(--sub); background: var(--surface3); border: 1px solid transparent; transition: all 0.1s; }
-    .tl-leg:hover .tl-leg-inner { border-color: var(--muted2); color: var(--text); }
-    .tl-leg.editing .tl-leg-inner { border-color: var(--accent); color: var(--accent); }
-    .tl-leg-chevron { font-size: 9px; color: var(--muted); }
+    /* ── Leg row (between stops) ── */
+    .tl-leg { padding: 2px 0 2px 30px; cursor: pointer; }
+    .tl-leg-inner { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); transition: color 0.1s; }
+    .tl-leg:hover .tl-leg-inner { color: var(--sub); }
+    .tl-leg.editing .tl-leg-inner { color: var(--accent); }
 
     /* ── Mode picker (inline, appears below leg badge) ── */
     .mode-picker-inline { padding: 4px 4px 2px 30px; display: flex; gap: 3px; flex-wrap: wrap; }
@@ -180,10 +179,9 @@
     /* ── Stop buttons ── */
     .stop-btn {
       background: none; border: none; color: var(--muted); cursor: pointer;
-      font-size: 15px; line-height: 1; padding: 2px 3px; border-radius: 3px;
+      font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 3px;
     }
     .stop-btn:hover { color: var(--sub); background: var(--surface3); }
-    .stop-btn.del:hover { color: var(--danger); background: rgba(200,110,110,0.1); }
 
     /* ── Copy menu ── */
     .copy-menu {
@@ -194,6 +192,8 @@
     .copy-menu-title { font-size: 10px; color: var(--muted); padding: 5px 8px 3px; text-transform: uppercase; letter-spacing: 0.05em; }
     .copy-opt { padding: 6px 10px; font-size: 12px; cursor: pointer; color: var(--sub); }
     .copy-opt:hover { background: var(--bg); color: var(--accent); }
+    .copy-opt.danger { color: var(--danger); }
+    .copy-opt.danger:hover { background: rgba(200,110,110,0.08); color: var(--danger); }
 
     /* ── Transit sub-opts ── */
     .t-btn {
@@ -744,13 +744,19 @@ function copyStop(stopId, fromDayId, toDayId) {
   recalcDay(toDay, t); scheduleSave()
 }
 
-function showCopyMenu(stopId, dayId, btn) {
+function showStopMenu(stopId, dayId, btn) {
   hideCopyMenu()
-  const t = activeTrip(); if (!t || t.days.length < 1) return
+  const t = activeTrip(); if (!t) return
   const menu = document.createElement('div')
   menu.className = 'copy-menu'; menu.id = 'copy-menu'
-  menu.innerHTML = `<div class="copy-menu-title">Copy to day</div>` +
-    t.days.map(d => `<div class="copy-opt" onmousedown="copyStop('${stopId}','${dayId}','${d.id}')">${esc(d.label)}</div>`).join('')
+  const otherDays = t.days.filter(d => d.id !== dayId)
+  let html = ''
+  if (otherDays.length) {
+    html += `<div class="copy-menu-title">Copy to</div>`
+    html += otherDays.map(d => `<div class="copy-opt" onmousedown="copyStop('${stopId}','${dayId}','${d.id}')">${esc(d.label)}</div>`).join('')
+  }
+  html += `<div class="copy-opt danger" onmousedown="removeStop('${dayId}','${stopId}')">✕ Delete</div>`
+  menu.innerHTML = html
   menu.addEventListener('click', e => e.stopPropagation())
   btn.closest('.tl-actions').appendChild(menu)
   setTimeout(() => document.addEventListener('click', hideCopyMenu, { once: true }), 100)
@@ -1188,8 +1194,8 @@ function renderSidebar() {
 
       const arrivalMins = tlEntry?.arrive ?? null
       const departMins  = tlEntry?.depart ?? null
-      const timeRange = (arrivalMins != null && !isVirtual)
-        ? `${fmtTime(arrivalMins)}${departMins != null ? '~'+fmtTime(departMins) : ''}`
+      const timeRange = arrivalMins != null
+        ? `${fmtTime(arrivalMins)}${departMins != null && departMins !== arrivalMins ? ' - '+fmtTime(departMins) : ''}`
         : ''
 
       const status = (!isVirtual && tripDate && arrivalMins != null) ? hoursStatus(stop, arrivalMins, tripDate) : 'unknown'
@@ -1217,18 +1223,15 @@ function renderSidebar() {
             onblur="setStopNote('${day.id}','${stop.id}',this.value)">${esc(stop.note || '')}</textarea>
         </div>` : ''
 
-      const chevron = stop._expanded ? '▼ ' : ''
-
       // Stop row
       const stopRow = isVirtual ? `
         <div class="tl-stop hotel-stop">
           <div class="tl-left"><div class="tl-dot" style="background:${color}">H</div></div>
           <div class="tl-content">
             <div class="tl-header">
-              ${timeRange ? `<span class="tl-time-range">${timeRange}</span>` : ''}
+              ${timeRange ? `<span class="tl-time-chip" style="color:${color};background:${color}26">${timeRange}</span>` : ''}
               <span class="tl-name">🏨 ${esc(stop.name)}</span>
             </div>
-            <div class="tl-addr">${esc(stop.address)}</div>
           </div>
         </div>` : `
         <div class="tl-stop"
@@ -1244,16 +1247,14 @@ function renderSidebar() {
           </div>
           <div class="tl-content" onclick="toggleStop('${day.id}','${stop.id}')">
             <div class="tl-header">
-              ${timeRange ? `<span class="tl-time-range">${timeRange}</span>` : ''}
-              <span class="tl-name">${chevron}${esc(stop.name)}</span>
+              ${timeRange ? `<span class="tl-time-chip" style="color:${color};background:${color}26">${timeRange}</span>` : ''}
+              <span class="tl-name">${esc(stop.name)}</span>
               ${hoursPill}
             </div>
-            ${!stop._expanded ? `<div class="tl-addr">${esc(stop.address)}</div>` : ''}
             ${expandedPanel}
           </div>
           <div class="tl-actions">
-            <button class="stop-btn" onmousedown="showCopyMenu('${stop.id}','${day.id}',this)" title="Copy">⧉</button>
-            <button class="stop-btn del" onclick="removeStop('${day.id}','${stop.id}')" title="Remove">×</button>
+            <button class="stop-btn" onmousedown="showStopMenu('${stop.id}','${day.id}',this)" title="Options">⋮</button>
           </div>
         </div>`
 
@@ -1295,7 +1296,6 @@ function renderSidebar() {
             <div class="tl-leg-inner">
               <span>${modeData.icon}</span>
               <span>${legText}</span>
-              <span class="tl-leg-chevron">▼</span>
             </div>
           </div>
           ${isEditing ? `
