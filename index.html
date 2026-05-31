@@ -1,0 +1,1588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trip Planner</title>
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --surface: #141414;
+      --surface2: #1f1f1f;
+      --surface3: #272727;
+      --accent: #c8a96e;
+      --text: #e8e8e8;
+      --sub: #aaa;
+      --muted: #666;
+      --muted2: #3a3a3a;
+      --danger: #c86e6e;
+      --blue: #6eb5c8;
+      --green: #6ec87a;
+      --radius: 7px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg); color: var(--text);
+      height: 100vh; display: flex; flex-direction: column;
+      overflow: hidden; font-size: 14px;
+    }
+
+    /* ── Header ── */
+    #header {
+      background: var(--surface); border-bottom: 1px solid var(--muted2);
+      padding: 8px 12px; display: flex; align-items: center; gap: 7px; flex-shrink: 0;
+    }
+    #header h1 { font-size: 15px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+    #trip-select {
+      flex: 1; max-width: 180px; background: var(--surface2); border: 1px solid var(--muted2);
+      color: var(--text); padding: 5px 8px; border-radius: var(--radius); font-size: 13px;
+    }
+    .btn {
+      background: var(--surface2); border: 1px solid var(--muted2); color: var(--sub);
+      padding: 5px 10px; border-radius: var(--radius); cursor: pointer; font-size: 13px;
+      white-space: nowrap; transition: all 0.15s;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.accent { background: var(--accent); color: #0d0d0d; border-color: var(--accent); font-weight: 600; }
+    .btn.accent:hover { opacity: 0.85; color: #0d0d0d; }
+
+    /* ── Layout ── */
+    #main { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 320px; background: var(--surface); border-right: 1px solid var(--muted2);
+      display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
+    }
+
+    /* ── Sidebar tabs ── */
+    .sidebar-tabs {
+      display: flex; border-bottom: 1px solid var(--muted2); flex-shrink: 0;
+    }
+    .sidebar-tab {
+      flex: 1; padding: 8px; text-align: center; font-size: 13px; cursor: pointer;
+      color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.15s;
+    }
+    .sidebar-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ── Scrollable content ── */
+    #days-list, #hotels-list {
+      flex: 1; overflow-y: auto; padding: 10px 8px;
+    }
+    #days-list::-webkit-scrollbar, #hotels-list::-webkit-scrollbar { width: 3px; }
+    #days-list::-webkit-scrollbar-thumb, #hotels-list::-webkit-scrollbar-thumb { background: var(--muted2); border-radius: 2px; }
+    #hotels-list { display: none; }
+    #sidebar.hotels-tab #days-list { display: none; }
+    #sidebar.hotels-tab #hotels-list { display: block; }
+
+    /* ── Day block ── */
+    .day-block { margin-bottom: 16px; }
+    .day-header {
+      display: flex; align-items: center; gap: 7px; margin-bottom: 7px; padding: 0 2px;
+    }
+    .day-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .day-label { font-size: 12px; font-weight: 700; flex: 1; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
+    .day-del {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 16px; line-height: 1; padding: 1px 4px; border-radius: 4px;
+    }
+    .day-del:hover { color: var(--danger); background: rgba(200,110,110,0.1); }
+    .time-input {
+      background: var(--surface3); border: 1px solid var(--muted2); color: var(--text);
+      border-radius: 4px; padding: 2px 5px; font-size: 11px; outline: none;
+      color-scheme: dark;
+    }
+    .time-input:focus { border-color: var(--accent); }
+
+    /* ── Drop zone ── */
+    .day-dropzone {
+      min-height: 6px; border-radius: 4px; transition: all 0.15s; margin: 3px 0;
+    }
+    .day-dropzone.drag-over { min-height: 30px; background: rgba(200,169,110,0.1); border: 1px dashed var(--accent); }
+
+    /* ── Timeline stops ── */
+    .tl-stop {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 5px 4px; border-radius: 6px;
+      cursor: grab; border: 1px solid transparent;
+      transition: border-color 0.1s, opacity 0.1s;
+      position: relative;
+    }
+    .tl-stop:hover { background: rgba(255,255,255,0.025); }
+    .tl-stop.dragging { opacity: 0.3; }
+    .tl-stop.drop-before { border-top: 2px solid var(--accent); }
+    .tl-stop.drop-after  { border-bottom: 2px solid var(--accent); }
+    .tl-stop.hotel-stop  { cursor: default; }
+
+    .tl-left { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+    .tl-drag { font-size: 12px; color: var(--muted2); cursor: grab; user-select: none; line-height: 1; margin-bottom: 3px; }
+    .tl-dot {
+      width: 22px; height: 22px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; color: #0d0d0d; flex-shrink: 0;
+    }
+    .tl-content { flex: 1; min-width: 0; cursor: pointer; }
+    .tl-header { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
+    .tl-time-range { font-size: 11px; font-weight: 700; color: var(--accent); white-space: nowrap; flex-shrink: 0; }
+    .tl-name { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tl-addr { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tl-actions { display: flex; gap: 1px; flex-shrink: 0; position: relative; align-self: flex-start; margin-top: 2px; }
+
+    /* ── Expanded stop panel ── */
+    .stop-expand {
+      background: rgba(0,0,0,0.2); border-radius: 5px; padding: 8px 9px;
+      margin-top: 5px; font-size: 12px; color: var(--sub);
+    }
+    .stop-expand .addr-full { color: var(--sub); margin-bottom: 6px; }
+    .stop-timeline { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+    .tl-label { color: var(--muted); font-size: 11px; }
+    .tl-time { color: var(--text); font-size: 12px; font-weight: 600; }
+    .dwell-sel {
+      background: var(--surface3); border: 1px solid var(--muted2); color: var(--text);
+      border-radius: 4px; padding: 2px 4px; font-size: 11px; outline: none;
+    }
+    .dwell-sel:focus { border-color: var(--accent); }
+    .hours-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .hours-badge.open   { background: rgba(110,181,200,0.15); color: var(--blue); }
+    .hours-badge.closed { background: var(--surface3); color: var(--muted); text-decoration: line-through; }
+    .hours-badge.holiday { background: var(--surface3); color: var(--muted); }
+    .hours-badge.unknown { display: none; }
+    .hours-text { font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+    .stop-note {
+      width: 100%; background: var(--bg); border: 1px solid var(--muted2); color: var(--text);
+      border-radius: 4px; padding: 5px 7px; font-size: 12px; font-family: inherit;
+      resize: vertical; min-height: 48px; outline: none;
+    }
+    .stop-note:focus { border-color: var(--accent); }
+
+    /* ── Leg badge (between stops) ── */
+    .tl-leg { padding: 3px 0 3px 30px; cursor: pointer; }
+    .tl-leg-inner { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 10px; font-size: 11px; color: var(--sub); background: var(--surface3); border: 1px solid transparent; transition: all 0.1s; }
+    .tl-leg:hover .tl-leg-inner { border-color: var(--muted2); color: var(--text); }
+    .tl-leg.editing .tl-leg-inner { border-color: var(--accent); color: var(--accent); }
+    .tl-leg-chevron { font-size: 9px; color: var(--muted); }
+
+    /* ── Mode picker (inline, appears below leg badge) ── */
+    .mode-picker-inline { padding: 4px 4px 2px 30px; display: flex; gap: 3px; flex-wrap: wrap; }
+    .mp-btn { background: var(--surface3); border: 1px solid var(--muted2); color: var(--sub); border-radius: 5px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
+    .mp-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .mp-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(200,169,110,0.1); }
+    .transit-sub { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; padding: 3px 4px 3px 30px; }
+    .leg-steps { padding: 4px 4px 4px 30px; }
+    .leg-steps-toggle { background: none; border: none; color: var(--muted); font-size: 11px; cursor: pointer; padding: 1px 4px; }
+    .leg-steps-toggle:hover { color: var(--sub); }
+
+    /* ── Stop buttons ── */
+    .stop-btn {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 15px; line-height: 1; padding: 2px 3px; border-radius: 3px;
+    }
+    .stop-btn:hover { color: var(--sub); background: var(--surface3); }
+    .stop-btn.del:hover { color: var(--danger); background: rgba(200,110,110,0.1); }
+
+    /* ── Copy menu ── */
+    .copy-menu {
+      position: absolute; right: 0; top: 100%; margin-top: 2px;
+      background: var(--surface3); border: 1px solid var(--muted2);
+      border-radius: var(--radius); z-index: 400; min-width: 130px; overflow: hidden;
+    }
+    .copy-menu-title { font-size: 10px; color: var(--muted); padding: 5px 8px 3px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .copy-opt { padding: 6px 10px; font-size: 12px; cursor: pointer; color: var(--sub); }
+    .copy-opt:hover { background: var(--bg); color: var(--accent); }
+
+    /* ── Transit sub-opts ── */
+    .t-btn {
+      background: var(--surface3); border: 1px solid var(--muted2); color: var(--sub);
+      border-radius: 4px; padding: 3px 6px; font-size: 11px; cursor: pointer;
+    }
+    .t-btn.on { border-color: var(--blue); color: var(--blue); background: rgba(110,181,200,0.12); }
+    .pref-sel {
+      background: var(--surface3); border: 1px solid var(--muted2); color: var(--sub);
+      border-radius: 4px; padding: 3px 4px; font-size: 11px; outline: none;
+    }
+    .pref-sel:focus { border-color: var(--accent); }
+
+    .leg-detail {
+      background: rgba(0,0,0,0.25); border-radius: 5px; padding: 7px 9px;
+      margin-top: 2px; border-left: 2px solid var(--muted2);
+    }
+    .step {
+      font-size: 11px; color: var(--sub); padding: 2px 0;
+      border-bottom: 1px solid var(--muted2); display: flex; gap: 6px; align-items: flex-start;
+    }
+    .step:last-child { border-bottom: none; }
+    .step-icon { flex-shrink: 0; color: var(--muted); }
+    .step.taxi { color: var(--accent); }
+    .step.transit-step { color: var(--blue); }
+    .step.no-detail { color: var(--muted); font-style: italic; }
+
+    /* ── Stop search ── */
+    .stop-search-wrap { position: relative; margin-top: 5px; }
+    .stop-search {
+      width: 100%; background: transparent; border: 1px dashed var(--muted2);
+      color: var(--text); padding: 6px 10px; border-radius: var(--radius);
+      font-size: 13px; outline: none; transition: border-color 0.15s;
+    }
+    .stop-search:focus { border-color: var(--accent); border-style: solid; }
+    .stop-search::placeholder { color: var(--muted); }
+    .search-dropdown {
+      position: absolute; top: calc(100% + 2px); left: 0; right: 0;
+      background: var(--surface2); border: 1px solid var(--muted2);
+      border-radius: var(--radius); z-index: 200; overflow: hidden; display: none;
+    }
+    .search-dropdown.open { display: block; }
+    .search-opt { padding: 8px 10px; cursor: pointer; border-bottom: 1px solid var(--muted2); }
+    .search-opt:last-child { border-bottom: none; }
+    .search-opt:hover { background: var(--bg); }
+    .search-opt-name { font-size: 13px; font-weight: 500; color: var(--text); }
+    .search-opt-addr { font-size: 11px; color: var(--sub); margin-top: 2px; }
+
+    /* ── Hotels tab ── */
+    .hotel-search-wrap { position: relative; margin-bottom: 10px; }
+    .hotel-search {
+      width: 100%; background: transparent; border: 1px dashed var(--muted2);
+      color: var(--text); padding: 6px 10px; border-radius: var(--radius);
+      font-size: 13px; outline: none; transition: border-color 0.15s;
+    }
+    .hotel-search:focus { border-color: var(--accent); border-style: solid; }
+    .hotel-search::placeholder { color: var(--muted); }
+    .hotel-card {
+      background: var(--surface2); border-radius: var(--radius); padding: 10px 10px 8px;
+      margin-bottom: 8px; border: 1px solid var(--muted2);
+    }
+    .hotel-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; display: flex; align-items: center; gap: 5px; }
+    .hotel-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 2px; margin-left: auto; }
+    .hotel-del:hover { color: var(--danger); }
+    .hotel-addr { font-size: 11px; color: var(--sub); margin-bottom: 4px; }
+    .hotel-phone { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .hotel-nights { margin-bottom: 6px; }
+    .hotel-nights-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .nights-row { display: flex; gap: 4px; flex-wrap: wrap; }
+    .night-btn {
+      background: var(--surface3); border: 1px solid var(--muted2); color: var(--muted);
+      border-radius: 4px; padding: 3px 7px; font-size: 11px; cursor: pointer;
+    }
+    .night-btn.on { border-color: var(--accent); color: var(--accent); background: rgba(200,169,110,0.12); }
+    .hotel-note {
+      width: 100%; background: var(--bg); border: 1px solid var(--muted2); color: var(--text);
+      border-radius: 4px; padding: 5px 7px; font-size: 12px; font-family: inherit;
+      resize: vertical; min-height: 44px; outline: none;
+    }
+    .hotel-note:focus { border-color: var(--accent); }
+    .hotel-leg-label { font-size: 10px; color: var(--muted); margin-bottom: 3px; margin-top: 5px; }
+    .hotel-leg-row { display: flex; gap: 3px; }
+    .hlm-btn {
+      background: var(--surface3); border: 1px solid var(--muted2);
+      border-radius: 4px; padding: 3px 7px; font-size: 12px; cursor: pointer;
+    }
+    .hlm-btn.active { border-color: var(--accent); background: rgba(200,169,110,0.15); }
+
+    /* ── Sidebar footer ── */
+    #sidebar-footer { padding: 8px; border-top: 1px solid var(--muted2); flex-shrink: 0; }
+
+    /* ── Map ── */
+    #map-wrap { flex: 1; position: relative; }
+    #map { width: 100%; height: 100%; }
+    #no-key {
+      display: none; position: absolute; inset: 0; background: var(--bg);
+      flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+      color: var(--sub); font-size: 14px;
+    }
+    #no-key.visible { display: flex; }
+    #no-key .big { font-size: 42px; margin-bottom: 4px; }
+
+    /* ── Settings modal ── */
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.78); z-index: 1000; display: none; align-items: center; justify-content: center; }
+    .overlay.open { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--muted2); border-radius: 12px; padding: 22px; width: 360px; max-width: 92vw; }
+    .modal h2 { font-size: 15px; color: var(--accent); margin-bottom: 18px; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .field input[type=password], .field input[type=text] {
+      width: 100%; background: var(--bg); border: 1px solid var(--muted2); color: var(--text);
+      padding: 7px 9px; border-radius: var(--radius); font-size: 12px; font-family: monospace; outline: none;
+    }
+    .field input:focus { border-color: var(--accent); }
+    .field .hint { font-size: 10px; color: var(--muted); margin-top: 4px; }
+    .cb-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--sub); cursor: pointer; }
+    .cb-row input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+
+    /* ── Status bar ── */
+    #status { font-size: 11px; color: var(--muted); padding: 3px 12px; background: var(--surface); border-top: 1px solid var(--muted2); flex-shrink: 0; }
+
+    /* ── Empty states ── */
+    .empty-state { text-align: center; color: var(--muted); padding: 32px 16px; font-size: 13px; }
+    .empty-state .big { font-size: 30px; margin-bottom: 6px; }
+
+    /* ── Trip info bar (start date) ── */
+    .trip-info-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 4px 10px; border-bottom: 1px solid var(--muted2); margin-bottom: 8px;
+    }
+    .trip-info-label { font-size: 12px; color: var(--muted); }
+    .trip-date-input {
+      background: var(--surface3); border: 1px solid var(--muted2); color: var(--text);
+      border-radius: 4px; padding: 3px 6px; font-size: 12px; outline: none;
+      color-scheme: dark; cursor: pointer; flex: 1;
+    }
+    .trip-date-input:focus { border-color: var(--accent); }
+
+    /* ── Inline hours pill ── */
+    .hi-pill { font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 8px; flex-shrink: 0; }
+    .hi-pill.open { background: rgba(110,181,200,0.2); color: var(--blue); }
+    .hi-pill.closed, .hi-pill.holiday { background: var(--surface3); color: var(--muted); }
+
+    @media (max-width: 600px) {
+      #main { flex-direction: column-reverse; }
+      #sidebar { width: 100%; height: 48vh; border-right: none; border-top: 1px solid var(--muted2); }
+      #map-wrap { height: 52vh; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>Trip Planner</h1>
+  <select id="trip-select"></select>
+  <button class="btn" onclick="newTrip()">+ Trip</button>
+  <button class="btn" onclick="renameActiveTrip()" title="Rename">✎</button>
+  <button class="btn" onclick="deleteActiveTrip()" title="Delete">✕</button>
+  <button class="btn" onclick="syncGist()">↕ Sync</button>
+  <button class="btn" onclick="showSettings()">⚙</button>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <div class="sidebar-tabs">
+      <div class="sidebar-tab active" id="tab-itin" onclick="switchTab('itin')">📅 Itinerary</div>
+      <div class="sidebar-tab" id="tab-hotels" onclick="switchTab('hotels')">🏨 Hotels</div>
+    </div>
+    <div id="days-list"></div>
+    <div id="hotels-list"></div>
+    <div id="sidebar-footer">
+      <button class="btn accent" style="width:100%" id="footer-btn" onclick="addDay()">+ Add Day</button>
+    </div>
+  </div>
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div id="no-key" class="visible">
+      <div class="big">🗺️</div>
+      <div>Enter your Google Maps API key to get started</div>
+      <button class="btn accent" onclick="showSettings()">Open Settings</button>
+    </div>
+  </div>
+</div>
+
+<div id="status">Ready</div>
+
+<div class="overlay" id="settings-overlay">
+  <div class="modal">
+    <h2>⚙ Settings</h2>
+    <div class="field">
+      <label>Google Maps API Key</label>
+      <input type="password" id="inp-key" placeholder="AIza…">
+      <div class="hint">Enable: Maps JS API, Places API (New), Routes API</div>
+    </div>
+    <div class="field">
+      <label>GitHub PAT (Gist sync — optional)</label>
+      <input type="password" id="inp-pat" placeholder="ghp_…">
+      <div class="hint">PAT with gist scope for cross-device sync</div>
+    </div>
+    <div class="field">
+      <label class="cb-row">
+        <input type="checkbox" id="inp-cb">
+        Color-blind friendly mode (Wong's palette)
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="hideSettings()">Cancel</button>
+      <button class="btn accent" onclick="saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────
+const GIST_FILE = 'trip-planner.json'
+const PALETTE_DEFAULT = ['#c8a96e','#6eb5c8','#6ec87a','#c86e6e','#b06ec8','#c8846e','#6e8bc8','#a8c86e']
+const PALETTE_CB      = ['#E69F00','#56B4E9','#009E73','#0072B2','#D55E00','#CC79A7','#F0E442','#777']
+const MODES = [
+  { id: 'DRIVE',       icon: '🚗', label: 'Drive'   },
+  { id: 'WALK',        icon: '🚶', label: 'Walk'    },
+  { id: 'BICYCLE',     icon: '🚲', label: 'Bike'    },
+  { id: 'TRANSIT',     icon: '🚇', label: 'Transit' },
+  { id: 'TWO_WHEELER', icon: '🛵', label: 'Scooter' },
+]
+const DWELL_OPTS = [
+  { v: 15, l: '15m' },{ v: 30, l: '30m' },{ v: 45, l: '45m' },
+  { v: 60, l: '1h' },{ v: 90, l: '1.5h' },{ v: 120, l: '2h' },
+  { v: 180, l: '3h' },{ v: 240, l: '4h' },{ v: 480, l: '8h' },
+]
+const $ = id => document.getElementById(id)
+
+// ── State ──────────────────────────────────────────────────────────────────
+let S    = { apiKey: '', pat: '', gistId: '', activeTripId: null, colorblind: false }
+let DATA = { trips: [] }
+let map       = null
+let markers   = []
+let polylines = []
+let searchTimers = {}
+let hotelSearchTimer = null
+let saveTimer = null
+let dragState = null
+let activeTab = 'itin'
+let editingLeg = null // 'dayId-stopIdx'
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const uid  = () => Math.random().toString(36).slice(2, 10)
+const esc  = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+const setStatus = msg => $('status').textContent = msg
+const dayColor  = i => (S.colorblind ? PALETTE_CB : PALETTE_DEFAULT)[i % 8]
+
+function activeTrip() {
+  return DATA.trips.find(t => t.id === S.activeTripId) || DATA.trips[0] || null
+}
+
+function parseDur(s) { return parseInt(String(s).replace('s','')) || 0 }
+
+function fmtDuration(secs) {
+  if (!secs) return ''
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60)
+  return h ? `${h}h ${m}m` : `${m} min`
+}
+
+function fmtDist(m) {
+  if (!m) return ''
+  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`
+}
+
+function calcTaxiFare(meters) {
+  if (!meters) return null
+  const base = 85, baseM = 1250, perUnit = 5, unitM = 200
+  if (meters <= baseM) return `NT$${base}`
+  return `NT$${base + Math.ceil((meters - baseM) / unitM) * perUnit}`
+}
+
+function parseTime(str) {
+  if (!str) return null
+  const [h, m] = str.split(':').map(Number)
+  return h * 60 + m
+}
+
+function fmtTime(mins) {
+  if (mins == null) return ''
+  const h = Math.floor(mins / 60) % 24, m = mins % 60
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`
+}
+
+// ── Date helpers ──────────────────────────────────────────────────────────
+function getTripDate(trip, dayIndex) {
+  if (!trip.startDate) return null
+  const d = new Date(trip.startDate + 'T00:00:00')
+  d.setDate(d.getDate() + dayIndex)
+  return d
+}
+
+function formatDayLabel(trip, dayIndex) {
+  const base = `Day ${dayIndex + 1}`
+  const date = getTripDate(trip, dayIndex)
+  if (!date) return base
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  return `${base} · ${days[date.getDay()]} ${months[date.getMonth()]} ${date.getDate()}`
+}
+
+// ── Business hours ────────────────────────────────────────────────────────
+function hoursStatus(stop, arrivalMins, date) {
+  const h = stop.hours
+  if (!h || !h.periods || !date) return 'unknown'
+  const dow = date.getDay() // 0=Sun
+  // Check if any exception (special hours) marks it as closed/holiday
+  // regularOpeningHours doesn't have exceptions, so just check periods
+  const dayPeriods = h.periods.filter(p => p.open && p.open.day === dow)
+  if (!dayPeriods.length) {
+    // Check if any period covers at all — if not, closed
+    return 'closed'
+  }
+  if (arrivalMins == null) return 'unknown'
+  for (const period of dayPeriods) {
+    const openMins  = period.open.hour  * 60 + period.open.minute
+    let   closeMins = period.close ? period.close.hour * 60 + period.close.minute : 24 * 60
+    // Handle overnight closing
+    if (period.close && period.close.day !== dow) closeMins += 24 * 60
+    if (arrivalMins >= openMins && arrivalMins < closeMins) return 'open'
+  }
+  return 'closed'
+}
+
+function formatHoursText(stop, date) {
+  const h = stop.hours
+  if (!h || !h.periods || !date) return ''
+  const dow = date.getDay()
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+  const dayPeriods = h.periods.filter(p => p.open && p.open.day === dow)
+  if (!dayPeriods.length) return `${days[dow]}: Closed`
+  return dayPeriods.map(p => {
+    const o = `${p.open.hour}:${String(p.open.minute||0).padStart(2,'0')}`
+    const c = p.close ? `${p.close.hour}:${String(p.close.minute||0).padStart(2,'0')}` : '24:00'
+    // Convert 24h to 12h AM/PM style
+    const fmt = t => {
+      const [h,m] = t.split(':').map(Number)
+      const ap = h >= 12 ? 'PM' : 'AM'
+      const hh = h % 12 || 12
+      return `${hh}:${String(m).padStart(2,'0')} ${ap}`
+    }
+    return `${days[dow]}: ${fmt(o)} – ${fmt(c)}`
+  }).join(', ')
+}
+
+// ── Hotel injection ───────────────────────────────────────────────────────
+function getEffectiveStops(day, dayIndex, trip) {
+  const eff = []
+  const hotels = trip.hotels || []
+  // Prepend: hotel with nights.includes(dayIndex - 1)
+  if (dayIndex > 0) {
+    const prev = hotels.find(h => h.nights && h.nights.includes(dayIndex - 1))
+    if (prev) eff.push({ ...prev, _virtual: true, _hotelId: prev.id, legMode: prev.legMode || 'DRIVE', dwellMinutes: 0 })
+  }
+  for (const s of day.stops) eff.push(s)
+  // Append: hotel with nights.includes(dayIndex)
+  const next = hotels.find(h => h.nights && h.nights.includes(dayIndex))
+  if (next) eff.push({ ...next, _virtual: true, _hotelId: next.id, legMode: next.legMode || 'DRIVE', dwellMinutes: 0 })
+  return eff
+}
+
+// ── Timeline ──────────────────────────────────────────────────────────────
+function computeTimeline(day, effectiveStops, legs) {
+  const startMins = parseTime(day.departureTime || '09:00') ?? 9 * 60
+  const tl = []
+  let cur = startMins
+  for (let i = 0; i < effectiveStops.length; i++) {
+    const stop = effectiveStops[i]
+    const arrive = i === 0 ? cur : cur
+    const dwell = stop.dwellMinutes ?? (stop._virtual ? 0 : 60)
+    const depart = arrive + dwell
+    tl.push({ arrive, depart })
+    if (i < effectiveStops.length - 1) {
+      const leg = legs?.[i]
+      const travelSecs = leg?.secs ?? 0
+      cur = depart + Math.round(travelSecs / 60)
+    }
+  }
+  return tl
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+function boot() {
+  S.apiKey       = localStorage.getItem('tp_key')    || ''
+  S.pat          = localStorage.getItem('tp_pat')    || ''
+  S.gistId       = localStorage.getItem('tp_gist')   || ''
+  S.activeTripId = localStorage.getItem('tp_active') || null
+  S.colorblind   = localStorage.getItem('tp_cb') === '1'
+
+  const raw = localStorage.getItem('tp_data')
+  if (raw) try { DATA = JSON.parse(raw) } catch(e) {}
+
+  // Ensure all trips have hotels array
+  for (const t of DATA.trips) { if (!t.hotels) t.hotels = [] }
+
+  renderTripSelect()
+  renderSidebar()
+  renderHotels()
+
+  if (S.apiKey) loadGoogleMaps()
+  if (S.pat && S.gistId) syncGist()
+}
+
+// ── Tab switching ──────────────────────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab
+  $('tab-itin').classList.toggle('active', tab === 'itin')
+  $('tab-hotels').classList.toggle('active', tab === 'hotels')
+  const sb = $('sidebar')
+  sb.classList.toggle('hotels-tab', tab === 'hotels')
+  $('footer-btn').textContent = tab === 'itin' ? '+ Add Day' : '+ Add Hotel'
+  $('footer-btn').onclick = tab === 'itin' ? addDay : showHotelSearch
+}
+
+function showHotelSearch() {
+  $('hotels-list').querySelector('.hotel-search')?.focus()
+}
+
+// ── Google Maps ────────────────────────────────────────────────────────────
+function loadGoogleMaps() {
+  if (window.google?.maps) { initMap(); return }
+  const s = document.createElement('script')
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(S.apiKey)}&callback=_mapLoaded&libraries=geometry`
+  s.async = true
+  s.onerror = () => setStatus('Failed to load Google Maps — check your API key')
+  document.head.appendChild(s)
+}
+
+window._mapLoaded = function() {
+  $('no-key').classList.remove('visible')
+  map = new google.maps.Map($('map'), {
+    center: { lat: 25.033, lng: 121.565 }, zoom: 12,
+    mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
+    styles: darkStyle()
+  })
+  renderMap()
+}
+
+function initMap() {
+  window._mapLoaded()
+}
+
+// ── Trip management ────────────────────────────────────────────────────────
+function newTrip() {
+  const name = prompt('Trip name:', 'My Trip')
+  if (!name) return
+  const trip = { id: uid(), name: name.trim(), startDate: '', hotels: [], days: [] }
+  DATA.trips.push(trip)
+  S.activeTripId = trip.id
+  localStorage.setItem('tp_active', trip.id)
+  renderTripSelect(); renderSidebar(); renderHotels(); scheduleSave()
+}
+
+function renameActiveTrip() {
+  const t = activeTrip(); if (!t) return
+  const name = prompt('Rename trip:', t.name)
+  if (!name || name === t.name) return
+  t.name = name.trim(); renderTripSelect(); scheduleSave()
+}
+
+function deleteActiveTrip() {
+  const t = activeTrip(); if (!t) return
+  if (!confirm(`Delete "${t.name}"?`)) return
+  DATA.trips = DATA.trips.filter(x => x.id !== t.id)
+  S.activeTripId = DATA.trips[0]?.id || null
+  localStorage.setItem('tp_active', S.activeTripId || '')
+  renderTripSelect(); renderSidebar(); renderHotels(); renderMap(); scheduleSave()
+}
+
+function renderTripSelect() {
+  const sel = $('trip-select')
+  sel.innerHTML = DATA.trips.length
+    ? DATA.trips.map(t => `<option value="${t.id}" ${t.id === S.activeTripId ? 'selected' : ''}>${esc(t.name)}</option>`).join('')
+    : '<option value="">— No trips —</option>'
+  sel.onchange = () => {
+    S.activeTripId = sel.value
+    localStorage.setItem('tp_active', sel.value)
+    renderSidebar(); renderHotels(); renderMap()
+  }
+}
+
+// ── Day management ─────────────────────────────────────────────────────────
+function addDay() {
+  const t = activeTrip()
+  if (!t) { alert('Create a trip first.'); return }
+  t.days.push({ id: uid(), label: `Day ${t.days.length + 1}`, departureTime: '', stops: [], _legs: null })
+  renderSidebar(); scheduleSave()
+}
+
+function removeDay(dayId) {
+  const t = activeTrip(); if (!t) return
+  if (!confirm('Remove this day and all its stops?')) return
+  t.days = t.days.filter(d => d.id !== dayId)
+  renderSidebar(); renderMap(); scheduleSave()
+}
+
+function setStartDate(val) {
+  const t = activeTrip(); if (!t) return
+  t.startDate = val
+  renderSidebar(); scheduleSave()
+}
+
+function setDeparture(dayId, val) {
+  const t = activeTrip(); if (!t) return
+  const day = t.days.find(d => d.id === dayId); if (!day) return
+  day.departureTime = val
+  recomputeTimeline(day); renderSidebar(); scheduleSave()
+}
+
+// ── Stop management ────────────────────────────────────────────────────────
+function addStop(dayId, place) {
+  const t = activeTrip(); if (!t) return
+  const day = t.days.find(d => d.id === dayId); if (!day) return
+  day.stops.push({
+    id: uid(), name: place.name, address: place.address,
+    lat: place.lat, lng: place.lng, placeId: place.placeId,
+    legMode: 'DRIVE', transitModes: [], transitPref: '',
+    dwellMinutes: 60, note: '',
+    hours: place.hours || null,
+    _expanded: false
+  })
+  day._legs = null
+  renderSidebar(); renderMap()
+  recalcDay(day, t); scheduleSave()
+}
+
+function removeStop(dayId, stopId) {
+  const t = activeTrip(); if (!t) return
+  const day = t.days.find(d => d.id === dayId); if (!day) return
+  day.stops = day.stops.filter(s => s.id !== stopId)
+  day._legs = null
+  renderSidebar(); renderMap()
+  recalcDay(day, t); scheduleSave()
+}
+
+function copyStop(stopId, fromDayId, toDayId) {
+  hideCopyMenu()
+  const t = activeTrip(); if (!t) return
+  const fromDay = t.days.find(d => d.id === fromDayId)
+  const stop = fromDay?.stops.find(s => s.id === stopId); if (!stop) return
+  const toDay = t.days.find(d => d.id === toDayId); if (!toDay) return
+  toDay.stops.push({ ...stop, id: uid(), _expanded: false })
+  toDay._legs = null
+  renderSidebar(); renderMap()
+  recalcDay(toDay, t); scheduleSave()
+}
+
+function showCopyMenu(stopId, dayId, btn) {
+  hideCopyMenu()
+  const t = activeTrip(); if (!t || t.days.length < 1) return
+  const menu = document.createElement('div')
+  menu.className = 'copy-menu'; menu.id = 'copy-menu'
+  menu.innerHTML = `<div class="copy-menu-title">Copy to day</div>` +
+    t.days.map(d => `<div class="copy-opt" onmousedown="copyStop('${stopId}','${dayId}','${d.id}')">${esc(d.label)}</div>`).join('')
+  menu.addEventListener('click', e => e.stopPropagation())
+  btn.closest('.tl-actions').appendChild(menu)
+  setTimeout(() => document.addEventListener('click', hideCopyMenu, { once: true }), 100)
+}
+
+function hideCopyMenu() {
+  const m = $('copy-menu'); if (m) m.remove()
+}
+
+function toggleStop(dayId, stopId) {
+  const t = activeTrip(); if (!t) return
+  const day = t.days.find(d => d.id === dayId); if (!day) return
+  const stop = day.stops.find(s => s.id === stopId); if (!stop) return
+  stop._expanded = !stop._expanded
+  renderSidebar()
+}
+
+function setDwell(dayId, stopId, val) {
+  const t = activeTrip(); if (!t) return
+  const day = t.days.find(d => d.id === dayId); if (!day) return
+  const stop = day.stops.find(s => s.id === stopId); if (!stop) return
+  stop.dwellMinutes = val
+  recomputeTimeline(day); renderSidebar(); scheduleSave()
+}
+
+function setStopNote(dayId, stopId, val) {
+  const t = activeTrip(); if (!t) return
+  const day = t.days.find(d => d.id === dayId); if (!day) return
+  const stop = day.stops.find(s => s.id === stopId); if (!stop) return
+  stop.note = val; scheduleSave()
+}
+
+// ── Hotel management ──────────────────────────────────────────────────────
+function addHotel(place) {
+  const t = activeTrip(); if (!t) return
+  if (!t.hotels) t.hotels = []
+  t.hotels.push({
+    id: uid(), name: place.name, address: place.address,
+    lat: place.lat, lng: place.lng, placeId: place.placeId,
+    phone: place.phone || '', note: '',
+    hours: place.hours || null,
+    nights: [], legMode: 'DRIVE'
+  })
+  renderHotels(); renderSidebar(); renderMap(); scheduleSave()
+}
+
+function removeHotel(hotelId) {
+  const t = activeTrip(); if (!t) return
+  if (!confirm('Remove this hotel?')) return
+  t.hotels = (t.hotels || []).filter(h => h.id !== hotelId)
+  // Recalc all days since hotel injection changes
+  for (const day of t.days) { day._legs = null }
+  renderHotels(); renderSidebar(); renderMap(); scheduleSave()
+}
+
+function toggleNight(hotelId, nightIdx) {
+  const t = activeTrip(); if (!t) return
+  const hotel = t.hotels.find(h => h.id === hotelId); if (!hotel) return
+  const i = hotel.nights.indexOf(nightIdx)
+  if (i >= 0) hotel.nights.splice(i, 1); else hotel.nights.push(nightIdx)
+  // Recalc affected days
+  for (const [di, day] of t.days.entries()) {
+    if (day._eff) { day._eff = null; day._legs = null }
+  }
+  renderSidebar(); renderMap(); scheduleSave()
+  // Recalc all days (hotel injection affects routes)
+  for (const [di, day] of t.days.entries()) recalcDay(day, t)
+}
+
+function setHotelNote(hotelId, val) {
+  const t = activeTrip(); if (!t) return
+  const h = t.hotels.find(h => h.id === hotelId); if (!h) return
+  h.note = val; scheduleSave()
+}
+
+function setHotelLegMode(hotelId, mode) {
+  const t = activeTrip(); if (!t) return
+  const hotel = t.hotels.find(h => h.id === hotelId); if (!hotel) return
+  hotel.legMode = mode
+  // Recalc days where hotel is injected
+  for (const [di, day] of t.days.entries()) {
+    if (hotel.nights.includes(di - 1) || hotel.nights.includes(di)) {
+      day._legs = null; recalcDay(day, t)
+    }
+  }
+  renderHotels(); scheduleSave()
+}
+
+// ── Leg mode / transit ─────────────────────────────────────────────────────
+function setLegMode(dayId, stopId, mode) {
+  const t = activeTrip(); if (!t) return
+  const day = t.days.find(d => d.id === dayId); if (!day) return
+  const stop = day.stops.find(s => s.id === stopId); if (!stop) return
+  stop.legMode = mode
+  renderSidebar()
+  const eff = day._eff || getEffectiveStops(day, t.days.indexOf(day), t)
+  const si = eff.findIndex(s => s.id === stopId)
+  if (si >= 0) calcAndRenderLeg(day, si, t)
+  scheduleSave()
+}
+
+function toggleTransitMode(dayId, stopId, mode) {
+  const t = activeTrip(); if (!t) return
+  const day = t.days.find(d => d.id === dayId); if (!day) return
+  const stop = day.stops.find(s => s.id === stopId); if (!stop) return
+  if (!stop.transitModes) stop.transitModes = []
+  const i = stop.transitModes.indexOf(mode)
+  if (i >= 0) stop.transitModes.splice(i, 1); else stop.transitModes.push(mode)
+  renderSidebar()
+  const eff = day._eff || getEffectiveStops(day, t.days.indexOf(day), t)
+  const si = eff.findIndex(s => s.id === stopId)
+  if (si >= 0) calcAndRenderLeg(day, si, t)
+  scheduleSave()
+}
+
+function setTransitPref(dayId, stopId, val) {
+  const t = activeTrip(); if (!t) return
+  const day = t.days.find(d => d.id === dayId); if (!day) return
+  const stop = day.stops.find(s => s.id === stopId); if (!stop) return
+  stop.transitPref = val
+  const eff = day._eff || getEffectiveStops(day, t.days.indexOf(day), t)
+  const si = eff.findIndex(s => s.id === stopId)
+  if (si >= 0) calcAndRenderLeg(day, si, t)
+  scheduleSave()
+}
+
+function toggleLeg(dayId, legIdx) {
+  const t = activeTrip(); if (!t) return
+  const day = t.days.find(d => d.id === dayId); if (!day) return
+  if (day._legs?.[legIdx]) {
+    day._legs[legIdx].expanded = !day._legs[legIdx].expanded
+    renderSidebar()
+  }
+}
+
+function toggleModePicker(dayId, si) {
+  const key = `${dayId}-${si}`
+  editingLeg = editingLeg === key ? null : key
+  renderSidebar()
+}
+
+function pickLegMode(dayId, stopId, mode) {
+  editingLeg = null
+  const t = activeTrip(); if (!t) return
+  const day = t.days.find(d => d.id === dayId); if (!day) return
+  const si = day.stops.findIndex(s => s.id === stopId); if (si < 0) return
+  day.stops[si].legMode = mode
+  if (day._legs) day._legs[si] = null
+  renderSidebar()
+  calcAndRenderLeg(day, si)
+  scheduleSave()
+}
+
+// ── Timeline recompute ────────────────────────────────────────────────────
+function recomputeTimeline(day) {
+  if (day._eff && day._legs) {
+    day._timeline = computeTimeline(day, day._eff, day._legs)
+  }
+}
+
+// ── recalcDay ─────────────────────────────────────────────────────────────
+async function recalcDay(day, trip) {
+  if (!trip) trip = activeTrip()
+  if (!trip) return
+  const dayIndex = trip.days.indexOf(day)
+  day._eff = getEffectiveStops(day, dayIndex, trip)
+  const eff = day._eff
+  const n = eff.length - 1
+  if (n <= 0) { day._legs = []; day._timeline = computeTimeline(day, eff, []); renderSidebar(); return }
+  day._legs = new Array(n).fill(null)
+  renderSidebar()
+  await Promise.all(eff.slice(0, n).map((_, i) => calcAndRenderLeg(day, i, trip)))
+}
+
+async function calcAndRenderLeg(day, i, trip) {
+  if (!trip) trip = activeTrip()
+  if (!trip) return
+  if (!day._eff) day._eff = getEffectiveStops(day, trip.days.indexOf(day), trip)
+  const eff = day._eff
+  if (i < 0 || i >= eff.length - 1) return
+  const a = eff[i], b = eff[i + 1]
+  if (!a?.lat || !b?.lat) return
+  if (!day._legs) day._legs = new Array(eff.length - 1).fill(null)
+  const mode = a.legMode || 'DRIVE'
+  try {
+    const body = {
+      origin:      { location: { latLng: { latitude: a.lat, longitude: a.lng } } },
+      destination: { location: { latLng: { latitude: b.lat, longitude: b.lng } } },
+      travelMode: mode, computeAlternativeRoutes: false
+    }
+    if (mode === 'TRANSIT') {
+      const pref = {}
+      if (a.transitModes?.length) {
+        pref.allowedTravelModes = a.transitModes
+      }
+      if (a.transitPref) pref.routingPreference = a.transitPref
+      if (Object.keys(pref).length) body.transitPreferences = pref
+    }
+    const isTransit = mode === 'TRANSIT'
+    const fieldMask = isTransit
+      ? 'routes.duration,routes.distanceMeters,routes.legs.steps.navigationInstruction,routes.legs.steps.staticDuration,routes.legs.steps.transitDetails'
+      : 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps.navigationInstruction,routes.legs.steps.distanceMeters,routes.legs.steps.staticDuration'
+    const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': S.apiKey,
+        'X-Goog-FieldMask': fieldMask
+      },
+      body: JSON.stringify(body)
+    })
+    const json = await res.json()
+    const route = json.routes?.[0]
+    if (route) {
+      const secs = parseDur(route.duration), meters = route.distanceMeters || 0
+      const rawSteps = route.legs?.[0]?.steps || []
+      const steps = rawSteps.map(s => {
+        if (s.transitDetails) {
+          const td = s.transitDetails
+          return {
+            type: 'transit',
+            line: td.line?.name || td.line?.shortName || '?',
+            from: td.stopDetails?.departureStop?.name || '',
+            to:   td.stopDetails?.arrivalStop?.name || '',
+            stops: td.stopCount || 0
+          }
+        }
+        return {
+          type: 'nav',
+          text: s.navigationInstruction?.instructions || '',
+          dist: fmtDist(s.distanceMeters),
+          dur:  fmtDuration(parseDur(s.staticDuration))
+        }
+      }).filter(s => s.type === 'transit' || s.text)
+
+      const prevExpanded = day._legs[i]?.expanded || false
+      day._legs[i] = {
+        secs, meters,
+        label: [fmtDuration(secs), fmtDist(meters)].filter(Boolean).join(' · '),
+        polyline: route.polyline?.encodedPolyline || null,
+        steps, taxiFare: calcTaxiFare(meters), expanded: prevExpanded
+      }
+    } else {
+      day._legs[i] = null
+    }
+  } catch(e) {
+    day._legs[i] = null
+  }
+  day._timeline = computeTimeline(day, day._eff, day._legs)
+  renderSidebar(); drawPolylines()
+}
+
+// ── Place / Hotel search ───────────────────────────────────────────────────
+async function doPlacesSearch(q) {
+  if (!S.apiKey || q.length < 2) return []
+  try {
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': S.apiKey,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.regularOpeningHours,places.nationalPhoneNumber'
+      },
+      body: JSON.stringify({ textQuery: q, maxResultCount: 5 })
+    })
+    const data = await res.json()
+    return data.places || []
+  } catch(e) { return [] }
+}
+
+function buildSearchDropdown(places, onSelect) {
+  return places.map(p => {
+    const payload = JSON.stringify({
+      placeId: p.id,
+      name: p.displayName?.text || '',
+      address: p.formattedAddress || '',
+      lat: p.location?.latitude,
+      lng: p.location?.longitude,
+      hours: p.regularOpeningHours || null,
+      phone: p.nationalPhoneNumber || ''
+    }).replace(/'/g, "&#39;")
+    return `<div class="search-opt" data-p='${payload}'>
+      <div class="search-opt-name">${esc(p.displayName?.text || '')}</div>
+      <div class="search-opt-addr">${esc(p.formattedAddress || '')}</div>
+    </div>`
+  }).join('')
+}
+
+function onSearchInput(dayId, input, dropdown) {
+  const q = input.value.trim()
+  clearTimeout(searchTimers[dayId])
+  if (q.length < 2) { dropdown.classList.remove('open'); return }
+  searchTimers[dayId] = setTimeout(async () => {
+    const places = await doPlacesSearch(q)
+    if (!places.length) { dropdown.classList.remove('open'); return }
+    dropdown.innerHTML = buildSearchDropdown(places)
+    dropdown.querySelectorAll('.search-opt').forEach(el => {
+      el.onmousedown = () => {
+        addStop(dayId, JSON.parse(el.dataset.p))
+        dropdown.classList.remove('open')
+        input.value = ''
+      }
+    })
+    dropdown.classList.add('open')
+  }, 300)
+}
+
+function onHotelSearchInput(input, dropdown) {
+  const q = input.value.trim()
+  clearTimeout(hotelSearchTimer)
+  if (q.length < 2) { dropdown.classList.remove('open'); return }
+  hotelSearchTimer = setTimeout(async () => {
+    const places = await doPlacesSearch(q)
+    if (!places.length) { dropdown.classList.remove('open'); return }
+    dropdown.innerHTML = buildSearchDropdown(places)
+    dropdown.querySelectorAll('.search-opt').forEach(el => {
+      el.onmousedown = () => {
+        addHotel(JSON.parse(el.dataset.p))
+        dropdown.classList.remove('open')
+        input.value = ''
+      }
+    })
+    dropdown.classList.add('open')
+  }, 300)
+}
+
+// ── Drag & Drop ────────────────────────────────────────────────────────────
+function dragStart(e, dayId, stopId) {
+  dragState = { dayId, stopId }
+  e.dataTransfer.effectAllowed = 'move'
+  setTimeout(() => e.target.closest('.tl-stop')?.classList.add('dragging'), 0)
+}
+
+function dragOver(e, el) {
+  if (!dragState) return
+  e.preventDefault(); e.dataTransfer.dropEffect = 'move'
+  const rect = el.getBoundingClientRect()
+  const before = e.clientY < rect.top + rect.height / 2
+  el.classList.toggle('drop-before', before)
+  el.classList.toggle('drop-after', !before)
+}
+
+function dragLeave(el) {
+  el.classList.remove('drop-before', 'drop-after', 'drag-over')
+}
+
+function dragDrop(e, targetDayId, targetStopId) {
+  e.preventDefault()
+  if (!dragState) return
+  const { dayId: srcDayId, stopId: srcStopId } = dragState
+  const t = activeTrip(); if (!t) return
+  const srcDay = t.days.find(d => d.id === srcDayId)
+  const srcIdx = srcDay.stops.findIndex(s => s.id === srcStopId)
+  const stop = srcDay.stops[srcIdx]
+  const tgtDay = t.days.find(d => d.id === targetDayId)
+  let tgtIdx = tgtDay.stops.findIndex(s => s.id === targetStopId)
+  const rect = e.currentTarget.getBoundingClientRect()
+  const insertBefore = e.clientY < rect.top + rect.height / 2
+  if (!insertBefore) tgtIdx++
+  srcDay.stops.splice(srcIdx, 1)
+  if (srcDay.id === tgtDay.id && srcIdx < tgtIdx) tgtIdx--
+  tgtDay.stops.splice(Math.max(0, tgtIdx), 0, stop)
+  srcDay._legs = null; tgtDay._legs = null
+  dragEnd()
+  renderSidebar(); renderMap()
+  recalcDay(srcDay, t)
+  if (srcDay.id !== tgtDay.id) recalcDay(tgtDay, t)
+  scheduleSave()
+}
+
+function dayDragOver(e, el) {
+  if (!dragState) return
+  e.preventDefault(); el.classList.add('drag-over')
+}
+
+function dayDrop(e, targetDayId) {
+  e.preventDefault()
+  if (!dragState) return
+  const { dayId: srcDayId, stopId: srcStopId } = dragState
+  const t = activeTrip(); if (!t) return
+  const srcDay = t.days.find(d => d.id === srcDayId)
+  const srcIdx = srcDay.stops.findIndex(s => s.id === srcStopId)
+  const stop = srcDay.stops[srcIdx]
+  srcDay.stops.splice(srcIdx, 1); srcDay._legs = null
+  const tgtDay = t.days.find(d => d.id === targetDayId)
+  tgtDay.stops.push(stop); tgtDay._legs = null
+  dragEnd()
+  renderSidebar(); renderMap()
+  recalcDay(srcDay, t)
+  if (srcDay.id !== tgtDay.id) recalcDay(tgtDay, t)
+  scheduleSave()
+}
+
+function dragEnd() {
+  dragState = null
+  document.querySelectorAll('.dragging,.drop-before,.drop-after,.drag-over').forEach(el =>
+    el.classList.remove('dragging','drop-before','drop-after','drag-over')
+  )
+}
+
+// ── Sidebar render ─────────────────────────────────────────────────────────
+function renderSidebar() {
+  const t = activeTrip()
+  const list = $('days-list')
+
+  if (!t) {
+    list.innerHTML = '<div class="empty-state"><div class="big">✈️</div>Create a trip to begin</div>'
+    return
+  }
+
+  const tripInfoBar = `
+    <div class="trip-info-bar">
+      <span class="trip-info-label">📅 Start date</span>
+      <input type="date" class="trip-date-input" value="${esc(t.startDate||'')}"
+        onchange="setStartDate(this.value)" title="Trip start date">
+    </div>`
+
+  if (!t.days.length) {
+    list.innerHTML = tripInfoBar + '<div class="empty-state"><div class="big">📅</div>Add a day to start planning</div>'
+    return
+  }
+
+  list.innerHTML = tripInfoBar + t.days.map((day, di) => {
+    const color = dayColor(di)
+    const tripDate = getTripDate(t, di)
+    const eff = day._eff || getEffectiveStops(day, di, t)
+    const tl = day._timeline
+
+    const stopsHtml = eff.map((stop, si) => {
+      const isVirtual = stop._virtual
+      const isLast = si === eff.length - 1
+      const leg = day._legs?.[si]
+      const realSi = day.stops.indexOf(stop)
+      const tlEntry = tl?.[si]
+
+      const arrivalMins = tlEntry?.arrive ?? null
+      const departMins  = tlEntry?.depart ?? null
+      const timeRange = (arrivalMins != null && !isVirtual)
+        ? `${fmtTime(arrivalMins)}${departMins != null ? '~'+fmtTime(departMins) : ''}`
+        : ''
+
+      const status = (!isVirtual && tripDate && arrivalMins != null) ? hoursStatus(stop, arrivalMins, tripDate) : 'unknown'
+      const hoursPill = status !== 'unknown' && !stop._expanded
+        ? `<span class="hi-pill ${status}">${status === 'open' ? '✓' : '✕'}</span>` : ''
+
+      // Expanded detail panel
+      const hoursText = formatHoursText(stop, tripDate)
+      const statusBadge = status !== 'unknown' ? `<div class="hours-badge ${status}">${status === 'open' ? '✓ Open' : status === 'holiday' ? '✕ Holiday' : '✕ Closed'}</div>` : ''
+      const expandedPanel = stop._expanded ? `
+        <div class="stop-expand">
+          <div class="addr-full">${esc(stop.address)}</div>
+          <div class="stop-timeline">
+            ${arrivalMins != null ? `<span class="tl-label">Arrive</span><span class="tl-time">${fmtTime(arrivalMins)}</span>` : ''}
+            <span class="tl-label">Stay</span>
+            <select class="dwell-sel" onchange="setDwell('${day.id}','${stop.id}',+this.value)">
+              ${DWELL_OPTS.map(o => `<option value="${o.v}" ${stop.dwellMinutes === o.v ? 'selected' : ''}>${o.l}</option>`).join('')}
+            </select>
+            ${departMins != null ? `<span class="tl-label">Depart</span><span class="tl-time">${fmtTime(departMins)}</span>` : ''}
+          </div>
+          ${statusBadge}
+          ${status !== 'unknown' && hoursText ? `<div class="hours-text">${esc(hoursText)}</div>` : ''}
+          <textarea class="stop-note" placeholder="Notes…"
+            onchange="setStopNote('${day.id}','${stop.id}',this.value)"
+            onblur="setStopNote('${day.id}','${stop.id}',this.value)">${esc(stop.note || '')}</textarea>
+        </div>` : ''
+
+      const chevron = stop._expanded ? '▼ ' : ''
+
+      // Stop row
+      const stopRow = isVirtual ? `
+        <div class="tl-stop hotel-stop">
+          <div class="tl-left"><div class="tl-dot" style="background:${color}">H</div></div>
+          <div class="tl-content">
+            <div class="tl-header">
+              ${timeRange ? `<span class="tl-time-range">${timeRange}</span>` : ''}
+              <span class="tl-name">🏨 ${esc(stop.name)}</span>
+            </div>
+            <div class="tl-addr">${esc(stop.address)}</div>
+          </div>
+        </div>` : `
+        <div class="tl-stop"
+          draggable="true"
+          ondragstart="dragStart(event,'${day.id}','${stop.id}')"
+          ondragover="dragOver(event,this)"
+          ondragleave="dragLeave(this)"
+          ondrop="dragDrop(event,'${day.id}','${stop.id}')"
+          ondragend="dragEnd()">
+          <div class="tl-left">
+            <div class="tl-drag">⠿</div>
+            <div class="tl-dot" style="background:${color}">${realSi + 1}</div>
+          </div>
+          <div class="tl-content" onclick="toggleStop('${day.id}','${stop.id}')">
+            <div class="tl-header">
+              ${timeRange ? `<span class="tl-time-range">${timeRange}</span>` : ''}
+              <span class="tl-name">${chevron}${esc(stop.name)}</span>
+              ${hoursPill}
+            </div>
+            ${!stop._expanded ? `<div class="tl-addr">${esc(stop.address)}</div>` : ''}
+            ${expandedPanel}
+          </div>
+          <div class="tl-actions">
+            <button class="stop-btn" onmousedown="showCopyMenu('${stop.id}','${day.id}',this)" title="Copy">⧉</button>
+            <button class="stop-btn del" onclick="removeStop('${day.id}','${stop.id}')" title="Remove">×</button>
+          </div>
+        </div>`
+
+      // Leg section between stops (not after last stop)
+      let legHtml = ''
+      if (!isLast) {
+        const mode = stop.legMode || 'DRIVE'
+        const modeData = MODES.find(m => m.id === mode) || MODES[0]
+        const legKey = `${day.id}-${si}`
+        const isEditing = editingLeg === legKey
+        const modes = stop.transitModes || []
+        const pref  = stop.transitPref  || ''
+
+        let legText = ''
+        if (day._legs === null) {
+          legText = 'calculating…'
+        } else if (leg) {
+          const nextTl = tl?.[si + 1]
+          const arriveStr = nextTl ? ` · → ${fmtTime(nextTl.arrive)}` : ''
+          legText = leg.label + arriveStr
+        } else {
+          legText = '—'
+        }
+
+        const legDetailHtml = leg?.expanded ? `
+          <div class="leg-detail" style="margin-left:30px;margin-top:2px">
+            ${leg.steps.length
+              ? leg.steps.map(s => s.type === 'transit'
+                ? `<div class="step transit-step"><span class="step-icon">🚇</span><span>${esc(s.line)} · ${esc(s.from)} → ${esc(s.to)} (${s.stops} stops)</span></div>`
+                : `<div class="step"><span class="step-icon">→</span><span>${esc(s.text)}${s.dist ? ' <span style="color:var(--muted)">· '+s.dist+'</span>' : ''}</span></div>`
+              ).join('')
+              : '<div class="step no-detail">No step details</div>'
+            }
+            ${leg.taxiFare ? `<div class="step taxi"><span class="step-icon">🚕</span><span>Taxi ~${leg.taxiFare}</span></div>` : ''}
+          </div>` : ''
+
+        legHtml = `
+          <div class="tl-leg ${isEditing ? 'editing' : ''}" onclick="toggleModePicker('${day.id}',${si});event.stopPropagation()">
+            <div class="tl-leg-inner">
+              <span>${modeData.icon}</span>
+              <span>${legText}</span>
+              <span class="tl-leg-chevron">▼</span>
+            </div>
+          </div>
+          ${isEditing ? `
+            <div class="mode-picker-inline">
+              ${MODES.map(m => `<button class="mp-btn ${mode===m.id?'active':''}" onclick="pickLegMode('${day.id}','${isVirtual ? stop._hotelId : stop.id}','${m.id}');event.stopPropagation()">${m.icon} ${m.label}</button>`).join('')}
+            </div>
+            ${mode === 'TRANSIT' && !isVirtual ? `
+              <div class="transit-sub">
+                <button class="t-btn ${modes.includes('SUBWAY')?'on':''}" onclick="toggleTransitMode('${day.id}','${stop.id}','SUBWAY');event.stopPropagation()">🚇 MRT</button>
+                <button class="t-btn ${modes.includes('TRAIN')?'on':''}" onclick="toggleTransitMode('${day.id}','${stop.id}','TRAIN');event.stopPropagation()">🚆 Train</button>
+                <button class="t-btn ${modes.includes('BUS')?'on':''}" onclick="toggleTransitMode('${day.id}','${stop.id}','BUS');event.stopPropagation()">🚌 Bus</button>
+                <select class="pref-sel" onchange="setTransitPref('${day.id}','${stop.id}',this.value)">
+                  <option value="" ${pref===''?'selected':''}>Default</option>
+                  <option value="FEWER_TRANSFERS" ${pref==='FEWER_TRANSFERS'?'selected':''}>Fewer transfers</option>
+                  <option value="LESS_WALKING" ${pref==='LESS_WALKING'?'selected':''}>Less walking</option>
+                </select>
+              </div>` : ''}
+            ${leg ? `<div style="padding:0 0 2px 30px">
+              <button class="leg-steps-toggle" onclick="toggleLeg('${day.id}',${si});event.stopPropagation()">${leg.expanded ? '▲ Hide steps' : '▼ Show steps'}</button>
+            </div>
+            ${legDetailHtml}` : ''}
+          ` : ''}
+        `
+      }
+
+      return stopRow + legHtml
+    }).join('')
+
+    const dayLabel = formatDayLabel(t, di)
+    return `
+      <div class="day-block">
+        <div class="day-header">
+          <div class="day-dot" style="background:${color}"></div>
+          <div class="day-label">${esc(dayLabel)}</div>
+          <input type="time" class="time-input" value="${esc(day.departureTime||'')}"
+            title="Departure time"
+            onchange="setDeparture('${day.id}',this.value)">
+          <button class="day-del" onclick="removeDay('${day.id}')">×</button>
+        </div>
+        ${stopsHtml}
+        <div class="day-dropzone"
+          ondragover="dayDragOver(event,this)"
+          ondragleave="dragLeave(this)"
+          ondrop="dayDrop(event,'${day.id}')"></div>
+        <div class="stop-search-wrap">
+          <input class="stop-search" placeholder="+ Add a stop…"
+            oninput="onSearchInput('${day.id}',this,this.nextElementSibling)"
+            onblur="setTimeout(()=>this.nextElementSibling.classList.remove('open'),150)">
+          <div class="search-dropdown"></div>
+        </div>
+      </div>`
+  }).join('')
+}
+
+// ── Hotels render ──────────────────────────────────────────────────────────
+function renderHotels() {
+  const t = activeTrip()
+  const list = $('hotels-list')
+
+  const searchWrap = `
+    <div class="hotel-search-wrap">
+      <input class="hotel-search" placeholder="Search for a hotel…"
+        oninput="onHotelSearchInput(this,this.nextElementSibling)"
+        onblur="setTimeout(()=>this.nextElementSibling.classList.remove('open'),150)">
+      <div class="search-dropdown"></div>
+    </div>`
+
+  if (!t) { list.innerHTML = searchWrap + '<div class="empty-state"><div class="big">🏨</div>Select a trip first</div>'; return }
+
+  const hotels = t.hotels || []
+  const dayCount = t.days.length
+
+  const hotelsHtml = hotels.map(h => {
+    const nightBtns = dayCount > 0
+      ? Array.from({ length: dayCount }, (_, i) => {
+          const on = h.nights.includes(i)
+          return `<button class="night-btn ${on ? 'on' : ''}" onclick="toggleNight('${h.id}',${i})" title="Night between Day ${i+1} and Day ${i+2}">${i + 1}</button>`
+        }).join('')
+      : '<span style="color:var(--muted);font-size:11px">Add days first</span>'
+
+    return `
+      <div class="hotel-card">
+        <div class="hotel-name">
+          🏨 ${esc(h.name)}
+          <button class="hotel-del" onclick="removeHotel('${h.id}')">×</button>
+        </div>
+        ${h.address ? `<div class="hotel-addr">📍 ${esc(h.address)}</div>` : ''}
+        ${h.phone   ? `<div class="hotel-phone">📞 ${esc(h.phone)}</div>` : ''}
+        <div class="hotel-nights">
+          <div class="hotel-nights-label">Stay which nights?</div>
+          <div class="nights-row">${nightBtns}</div>
+        </div>
+        <textarea class="hotel-note" placeholder="Note…"
+          onchange="setHotelNote('${h.id}',this.value)"
+          onblur="setHotelNote('${h.id}',this.value)">${esc(h.note || '')}</textarea>
+      </div>`
+  }).join('')
+
+  list.innerHTML = searchWrap + (hotels.length ? hotelsHtml : '<div class="empty-state"><div class="big">🏨</div>No hotels yet</div>')
+}
+
+// ── Map render ─────────────────────────────────────────────────────────────
+function renderMap() {
+  if (!map) return
+  clearMapOverlays()
+  const t = activeTrip(); if (!t) return
+  const bounds = new google.maps.LatLngBounds()
+  let hasPoints = false
+
+  t.days.forEach((day, di) => {
+    const color = dayColor(di)
+    const eff = day._eff || getEffectiveStops(day, di, t)
+    eff.forEach((stop, si) => {
+      if (!stop.lat || !stop.lng) return
+      const pos = { lat: stop.lat, lng: stop.lng }
+      const label = stop._virtual ? '🏨' : String(day.stops.indexOf(stop) + 1)
+      markers.push(new google.maps.Marker({
+        position: pos, map, title: stop.name,
+        label: stop._virtual
+          ? { text: 'H', color: '#0d0d0d', fontWeight: 'bold', fontSize: '10px' }
+          : { text: label, color: '#0d0d0d', fontWeight: 'bold', fontSize: '11px' },
+        icon: {
+          path: stop._virtual ? google.maps.SymbolPath.BACKWARD_CLOSED_ARROW : google.maps.SymbolPath.CIRCLE,
+          fillColor: color, fillOpacity: 1,
+          strokeColor: '#0d0d0d', strokeWeight: 2, scale: 13
+        }
+      }))
+      bounds.extend(pos); hasPoints = true
+    })
+  })
+  if (hasPoints) map.fitBounds(bounds, 60)
+  drawPolylines()
+}
+
+function drawPolylines() {
+  if (!map) return
+  polylines.forEach(p => p.setMap(null)); polylines = []
+  const t = activeTrip(); if (!t) return
+
+  t.days.forEach((day, di) => {
+    const color = dayColor(di)
+    const eff = day._eff || getEffectiveStops(day, di, t)
+    if (!eff.length) return
+    const legs = day._legs || []
+    for (let i = 0; i < eff.length - 1; i++) {
+      const a = eff[i], b = eff[i + 1]
+      if (!a?.lat || !b?.lat) continue
+      const leg = legs[i]
+      const path = (leg?.polyline && google.maps.geometry)
+        ? google.maps.geometry.encoding.decodePath(leg.polyline)
+        : [{ lat: a.lat, lng: a.lng }, { lat: b.lat, lng: b.lng }]
+      polylines.push(new google.maps.Polyline({
+        path, map, strokeColor: color,
+        strokeOpacity: leg?.polyline ? 0.85 : 0.35, strokeWeight: 3
+      }))
+    }
+  })
+}
+
+function clearMapOverlays() {
+  markers.forEach(m => m.setMap(null));   markers = []
+  polylines.forEach(p => p.setMap(null)); polylines = []
+}
+
+// ── Persistence ────────────────────────────────────────────────────────────
+function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 1200) }
+
+function save() {
+  localStorage.setItem('tp_data', JSON.stringify(DATA, (k, v) => k.startsWith('_') ? undefined : v))
+  localStorage.setItem('tp_active', S.activeTripId || '')
+  setStatus('Saved locally')
+  if (S.pat) pushGist()
+}
+
+async function findGist() {
+  let page = 1
+  while (true) {
+    const res = await fetch(`https://api.github.com/gists?per_page=100&page=${page}`, {
+      headers: { Authorization: `token ${S.pat}` }
+    })
+    const list = await res.json()
+    if (!Array.isArray(list) || !list.length) return null
+    const found = list.find(g => g.files?.[GIST_FILE])
+    if (found) return found.id
+    if (list.length < 100) return null
+    page++
+  }
+}
+
+async function syncGist() {
+  if (!S.pat) { setStatus('No PAT — Gist sync skipped'); return }
+  setStatus('Syncing…')
+  try {
+    if (!S.gistId) {
+      S.gistId = await findGist() || ''
+      localStorage.setItem('tp_gist', S.gistId)
+    }
+    if (S.gistId) {
+      const res = await fetch(`https://api.github.com/gists/${S.gistId}`, {
+        headers: { Authorization: `token ${S.pat}` }
+      })
+      const gist = await res.json()
+      const content = gist.files?.[GIST_FILE]?.content
+      if (content) {
+        try {
+          DATA = JSON.parse(content)
+          for (const t of DATA.trips) { if (!t.hotels) t.hotels = [] }
+          renderTripSelect(); renderSidebar(); renderHotels(); renderMap()
+          setStatus('Synced from Gist ✓'); return
+        } catch(e) {}
+      }
+    }
+    await pushGist()
+  } catch(e) { setStatus('Sync error: ' + e.message) }
+}
+
+async function pushGist() {
+  if (!S.pat) return
+  const content = JSON.stringify(DATA, (k, v) => k.startsWith('_') ? undefined : v, 2)
+  const res = await fetch(
+    S.gistId ? `https://api.github.com/gists/${S.gistId}` : 'https://api.github.com/gists',
+    {
+      method: S.gistId ? 'PATCH' : 'POST',
+      headers: { Authorization: `token ${S.pat}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: 'trip-planner data', public: false, files: { [GIST_FILE]: { content } } })
+    }
+  )
+  const gist = await res.json()
+  if (gist.id && !S.gistId) { S.gistId = gist.id; localStorage.setItem('tp_gist', gist.id) }
+  setStatus('Synced to Gist ✓')
+}
+
+// ── Settings ───────────────────────────────────────────────────────────────
+function showSettings() {
+  $('inp-key').value = S.apiKey
+  $('inp-pat').value = S.pat
+  $('inp-cb').checked = S.colorblind
+  $('settings-overlay').classList.add('open')
+}
+
+function hideSettings() {
+  $('settings-overlay').classList.remove('open')
+}
+
+function saveSettings() {
+  const newKey = $('inp-key').value.trim()
+  const keyChanged = newKey !== S.apiKey
+  S.apiKey     = newKey
+  S.pat        = $('inp-pat').value.trim()
+  S.colorblind = $('inp-cb').checked
+  localStorage.setItem('tp_key', S.apiKey)
+  localStorage.setItem('tp_pat', S.pat)
+  localStorage.setItem('tp_cb', S.colorblind ? '1' : '')
+  hideSettings()
+  if (S.apiKey && (keyChanged || !window.google?.maps)) loadGoogleMaps()
+  if (S.pat) syncGist()
+  renderSidebar(); renderHotels(); renderMap()
+}
+
+// ── Dark map style ─────────────────────────────────────────────────────────
+function darkStyle() {
+  return [
+    { elementType: 'geometry',            stylers: [{ color: '#242f3e' }] },
+    { elementType: 'labels.text.fill',    stylers: [{ color: '#d0cfc8' }] },
+    { elementType: 'labels.text.stroke',  stylers: [{ color: '#242f3e' }] },
+    { featureType: 'road',              elementType: 'geometry',         stylers: [{ color: '#38414e' }] },
+    { featureType: 'road',              elementType: 'geometry.stroke',  stylers: [{ color: '#212a37' }] },
+    { featureType: 'road',              elementType: 'labels.text.fill', stylers: [{ color: '#9ca5b3' }] },
+    { featureType: 'road.arterial',     elementType: 'geometry',         stylers: [{ color: '#4a5568' }] },
+    { featureType: 'road.highway',      elementType: 'geometry',         stylers: [{ color: '#746855' }] },
+    { featureType: 'road.highway',      elementType: 'geometry.stroke',  stylers: [{ color: '#1f2835' }] },
+    { featureType: 'road.highway',      elementType: 'labels.text.fill', stylers: [{ color: '#f3d19c' }] },
+    { featureType: 'water',             elementType: 'geometry',         stylers: [{ color: '#17263c' }] },
+    { featureType: 'water',             elementType: 'labels.text.fill', stylers: [{ color: '#515c6d' }] },
+    { featureType: 'poi',               elementType: 'geometry',         stylers: [{ color: '#283d6a' }] },
+    { featureType: 'poi',               elementType: 'labels.text.fill', stylers: [{ color: '#6f9ba5' }] },
+    { featureType: 'poi.park',          elementType: 'geometry',         stylers: [{ color: '#263c3f' }] },
+    { featureType: 'poi.park',          elementType: 'labels.text.fill', stylers: [{ color: '#6b9a76' }] },
+    { featureType: 'transit',           elementType: 'geometry',         stylers: [{ color: '#2f3948' }] },
+    { featureType: 'transit.station',   elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+    { featureType: 'landscape',         elementType: 'geometry',         stylers: [{ color: '#2a3444' }] },
+    { featureType: 'administrative',    elementType: 'geometry.stroke',  stylers: [{ color: '#4b6878' }] },
+  ]
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+boot()
+</script>
+</body>
+</html>
