@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Trip Planner</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <style>
     :root {
       --bg: #0d0d0d;
@@ -167,9 +168,9 @@
 
     /* ── Mode picker (inline, appears below leg badge) ── */
     .mode-picker-inline { padding: 4px 4px 2px 30px; display: flex; gap: 3px; flex-wrap: wrap; }
-    .mp-btn { background: var(--surface3); border: 1px solid var(--muted2); color: var(--sub); border-radius: 5px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
+    .mp-btn { background: var(--surface3); border: 1px solid var(--muted2); color: var(--sub); border-radius: 6px; width: 36px; height: 36px; display:inline-flex; align-items:center; justify-content:center; cursor: pointer; }
     .mp-btn:hover { border-color: var(--accent); color: var(--accent); }
-    .mp-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(200,169,110,0.1); }
+    .mp-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(200,169,110,0.12); }
     .transit-sub { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; padding: 3px 4px 3px 30px; }
     .leg-steps { padding: 4px 4px 4px 30px; }
     .leg-steps-toggle { background: none; border: none; color: var(--muted); font-size: 11px; cursor: pointer; padding: 1px 4px; }
@@ -459,12 +460,13 @@ const GIST_FILE = 'trip-planner.json'
 const PALETTE_DEFAULT = ['#c8a96e','#6eb5c8','#6ec87a','#c86e6e','#b06ec8','#c8846e','#6e8bc8','#a8c86e']
 const PALETTE_CB      = ['#E69F00','#56B4E9','#009E73','#0072B2','#D55E00','#CC79A7','#F0E442','#777']
 const MODES = [
-  { id: 'DRIVE',       icon: '🚗', label: 'Drive'   },
-  { id: 'WALK',        icon: '🚶', label: 'Walk'    },
-  { id: 'BICYCLE',     icon: '🚲', label: 'Bike'    },
-  { id: 'TRANSIT',     icon: '🚇', label: 'Transit' },
-  { id: 'TWO_WHEELER', icon: '🛵', label: 'Scooter' },
+  { id: 'DRIVE',       icon: 'directions_car',     label: 'Drive'   },
+  { id: 'WALK',        icon: 'directions_walk',    label: 'Walk'    },
+  { id: 'BICYCLE',     icon: 'directions_bike',    label: 'Bike'    },
+  { id: 'TRANSIT',     icon: 'directions_transit', label: 'Transit' },
+  { id: 'TWO_WHEELER', icon: 'two_wheeler',        label: 'Scooter' },
 ]
+const modeIconHtml = (iconName, size) => `<span class="material-icons" style="font-size:${size||'16px'};vertical-align:middle">${iconName}</span>`
 const DWELL_OPTS = [
   { v: 15, l: '15m' },{ v: 30, l: '30m' },{ v: 45, l: '45m' },
   { v: 60, l: '1h' },{ v: 90, l: '1.5h' },{ v: 120, l: '2h' },
@@ -942,7 +944,7 @@ function renderDetailPanel() {
     inner.innerHTML = `
       <div class="panel-header">
         <button class="panel-back" onclick="closePanel()">←</button>
-        <div class="panel-title">${modeData.icon} ${esc(fromStop.name)} → ${esc(toStop.name)}</div>
+        <div class="panel-title">${modeIconHtml(modeData.icon)} ${esc(fromStop.name)} → ${esc(toStop.name)}</div>
       </div>
       <div class="panel-body">
         ${leg ? `<div class="panel-section">
@@ -952,7 +954,7 @@ function renderDetailPanel() {
         <div class="panel-section">
           <div class="panel-label">Travel mode</div>
           <div class="mode-picker-row">
-            ${MODES.map(m => `<button class="mp-btn ${mode===m.id?'active':''}" onclick="pickLegMode('${dayId}','${stopId}','${m.id}')">${m.icon} ${m.label}</button>`).join('')}
+            ${MODES.map(m => `<button class="mp-btn ${mode===m.id?'active':''}" onclick="pickLegMode('${dayId}','${stopId}','${m.id}')" title="${m.label}">${modeIconHtml(m.icon,'20px')}</button>`).join('')}
           </div>
         </div>
         ${mode === 'TRANSIT' && !isVirtual ? `<div class="panel-section">
@@ -1440,7 +1442,7 @@ function renderSidebar() {
         legHtml = `
           <div class="tl-leg ${isLegSelected ? 'selected' : ''}" onclick="selectLeg('${day.id}',${si});event.stopPropagation()">
             <div class="tl-leg-inner">
-              <span>${modeData.icon}</span>
+              ${modeIconHtml(modeData.icon,'13px')}
               <span>${legText}</span>
             </div>
           </div>`
