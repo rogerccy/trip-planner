@@ -395,17 +395,17 @@
   <h1>Trip Planner</h1>
   <select id="trip-select"></select>
   <button class="btn" onclick="newTrip()">+ Trip</button>
-  <button class="btn" onclick="renameActiveTrip()" title="Rename">✎</button>
-  <button class="btn" onclick="deleteActiveTrip()" title="Delete">✕</button>
-  <button class="btn" onclick="syncGist()">↕ Sync</button>
-  <button class="btn" onclick="showSettings()">⚙</button>
+  <button class="btn" onclick="renameActiveTrip()" title="Rename"><span class="material-icons" style="font-size:18px">edit</span></button>
+  <button class="btn" onclick="deleteActiveTrip()" title="Delete trip"><span class="material-icons" style="font-size:18px">delete_outline</span></button>
+  <button class="btn" onclick="syncGist()"><span class="material-icons" style="font-size:18px;vertical-align:middle">sync</span> Sync</button>
+  <button class="btn" onclick="showSettings()" title="Settings"><span class="material-icons" style="font-size:18px">settings</span></button>
 </div>
 
 <div id="main">
   <div id="sidebar">
     <div class="sidebar-tabs">
-      <div class="sidebar-tab active" id="tab-itin" onclick="switchTab('itin')">📅 Itinerary</div>
-      <div class="sidebar-tab" id="tab-hotels" onclick="switchTab('hotels')">🏨 Hotels</div>
+      <div class="sidebar-tab active" id="tab-itin" onclick="switchTab('itin')"><span class="material-icons" style="font-size:15px;vertical-align:middle">calendar_today</span> Itinerary</div>
+      <div class="sidebar-tab" id="tab-hotels" onclick="switchTab('hotels')"><span class="material-icons" style="font-size:15px;vertical-align:middle">hotel</span> Hotels</div>
     </div>
     <div id="days-list"></div>
     <div id="hotels-list"></div>
@@ -419,7 +419,7 @@
   <div id="map-wrap">
     <div id="map"></div>
     <div id="no-key" class="visible">
-      <div class="big">🗺️</div>
+      <span class="material-icons" style="font-size:48px;color:var(--muted2);margin-bottom:8px">map</span>
       <div>Enter your Google Maps API key to get started</div>
       <button class="btn accent" onclick="showSettings()">Open Settings</button>
     </div>
@@ -430,7 +430,7 @@
 
 <div class="overlay" id="settings-overlay">
   <div class="modal">
-    <h2>⚙ Settings</h2>
+    <h2><span class="material-icons" style="font-size:18px;vertical-align:middle">settings</span> Settings</h2>
     <div class="field">
       <label>Google Maps API Key</label>
       <input type="password" id="inp-key" placeholder="AIza…">
@@ -466,7 +466,7 @@ const MODES = [
   { id: 'TRANSIT',     icon: 'directions_transit', label: 'Transit' },
   { id: 'TWO_WHEELER', icon: 'two_wheeler',        label: 'Scooter' },
 ]
-const modeIconHtml = (iconName, size) => `<span class="material-icons" style="font-size:${size||'16px'};vertical-align:middle">${iconName}</span>`
+const mi = (name, size) => `<span class="material-icons" style="font-size:${size||'16px'};vertical-align:middle">${name}</span>`
 const DWELL_OPTS = [
   { v: 15, l: '15m' },{ v: 30, l: '30m' },{ v: 45, l: '45m' },
   { v: 60, l: '1h' },{ v: 90, l: '1.5h' },{ v: 120, l: '2h' },
@@ -815,7 +815,7 @@ function showStopMenu(stopId, dayId, btn) {
     html += `<div class="copy-menu-title">Copy to</div>`
     html += otherDays.map(d => `<div class="copy-opt" onmousedown="copyStop('${stopId}','${dayId}','${d.id}')">${esc(d.label)}</div>`).join('')
   }
-  html += `<div class="copy-opt danger" onmousedown="removeStop('${dayId}','${stopId}')">✕ Delete</div>`
+  html += `<div class="copy-opt danger" onmousedown="removeStop('${dayId}','${stopId}')">${mi('delete_outline','14px')} Delete</div>`
   menu.innerHTML = html
   menu.addEventListener('click', e => e.stopPropagation())
   btn.closest('.tl-actions').appendChild(menu)
@@ -868,13 +868,13 @@ function renderDetailPanel() {
     const hoursText = formatHoursText(stop, tripDate)
     inner.innerHTML = `
       <div class="panel-header">
-        <button class="panel-back" onclick="closePanel()">←</button>
+        <button class="panel-back" onclick="closePanel()"><span class="material-icons" style="font-size:20px">arrow_back</span></button>
         <div class="panel-title">${esc(stop.name)}</div>
       </div>
       <div class="panel-body">
         ${stop.address ? `<div class="panel-section">
           <div class="panel-label">Location</div>
-          <div class="panel-addr">${esc(stop.address)}</div>
+          <div class="panel-addr">${mi('location_on','14px')} ${esc(stop.address)}</div>
         </div>` : ''}
         <div class="panel-section">
           <div class="panel-label">Time</div>
@@ -927,7 +927,7 @@ function renderDetailPanel() {
         const isLast = i === leg.steps.length - 1
         const nextTransit = leg.steps[i+1]?.type === 'transit'
         const connHtml = s.type === 'transit'
-          ? `<div class="rt-conn-body transit">🚇 ${esc(s.line)} · ${esc(s.from)} → ${esc(s.to)} (${s.stops} stops)</div>`
+          ? `<div class="rt-conn-body transit">${mi('subway','13px')} ${esc(s.line)} · ${esc(s.from)} → ${esc(s.to)} (${s.stops} stops)</div>`
           : s.text ? `<div class="rt-conn-body">${esc(s.text)}${s.dist?' · '+s.dist:''}</div>` : ''
         if (connHtml) rows.push(`<div class="rt-step">
           <div class="rt-left">${isLast?`<div class="rt-dot dest"></div>`:`<div class="rt-dot"></div><div class="rt-vline ${nextTransit?'transit':''}"></div>`}</div>
@@ -943,26 +943,26 @@ function renderDetailPanel() {
 
     inner.innerHTML = `
       <div class="panel-header">
-        <button class="panel-back" onclick="closePanel()">←</button>
-        <div class="panel-title">${modeIconHtml(modeData.icon)} ${esc(fromStop.name)} → ${esc(toStop.name)}</div>
+        <button class="panel-back" onclick="closePanel()"><span class="material-icons" style="font-size:20px">arrow_back</span></button>
+        <div class="panel-title">${mi(modeData.icon)} ${esc(fromStop.name)} → ${esc(toStop.name)}</div>
       </div>
       <div class="panel-body">
         ${leg ? `<div class="panel-section">
           <div class="leg-summary">${leg.label}</div>
-          ${leg.taxiFare ? `<div class="leg-taxi">🚕 Taxi ~${leg.taxiFare}</div>` : ''}
+          ${leg.taxiFare ? `<div class="leg-taxi">${mi('local_taxi','14px')} Taxi ~${leg.taxiFare}</div>` : ''}
         </div>` : ''}
         <div class="panel-section">
           <div class="panel-label">Travel mode</div>
           <div class="mode-picker-row">
-            ${MODES.map(m => `<button class="mp-btn ${mode===m.id?'active':''}" onclick="pickLegMode('${dayId}','${stopId}','${m.id}')" title="${m.label}">${modeIconHtml(m.icon,'20px')}</button>`).join('')}
+            ${MODES.map(m => `<button class="mp-btn ${mode===m.id?'active':''}" onclick="pickLegMode('${dayId}','${stopId}','${m.id}')" title="${m.label}">${mi(m.icon,'20px')}</button>`).join('')}
           </div>
         </div>
         ${mode === 'TRANSIT' && !isVirtual ? `<div class="panel-section">
           <div class="panel-label">Transit options</div>
           <div class="transit-sub" style="padding:0;margin-bottom:6px">
-            <button class="t-btn ${modes.includes('SUBWAY')?'on':''}" onclick="toggleTransitMode('${dayId}','${fromStop.id}','SUBWAY')">🚇 MRT</button>
-            <button class="t-btn ${modes.includes('TRAIN')?'on':''}" onclick="toggleTransitMode('${dayId}','${fromStop.id}','TRAIN')">🚆 Train</button>
-            <button class="t-btn ${modes.includes('BUS')?'on':''}" onclick="toggleTransitMode('${dayId}','${fromStop.id}','BUS')">🚌 Bus</button>
+            <button class="t-btn ${modes.includes('SUBWAY')?'on':''}" onclick="toggleTransitMode('${dayId}','${fromStop.id}','SUBWAY')">${mi('subway','14px')} MRT</button>
+            <button class="t-btn ${modes.includes('TRAIN')?'on':''}" onclick="toggleTransitMode('${dayId}','${fromStop.id}','TRAIN')">${mi('train','14px')} Train</button>
+            <button class="t-btn ${modes.includes('BUS')?'on':''}" onclick="toggleTransitMode('${dayId}','${fromStop.id}','BUS')">${mi('directions_bus','14px')} Bus</button>
           </div>
           <select class="pref-sel" style="width:100%" onchange="setTransitPref('${dayId}','${fromStop.id}',this.value)">
             <option value="" ${pref===''?'selected':''}>Default</option>
@@ -1357,19 +1357,19 @@ function renderSidebar() {
   const list = $('days-list')
 
   if (!t) {
-    list.innerHTML = '<div class="empty-state"><div class="big">✈️</div>Create a trip to begin</div>'
+    list.innerHTML = '<div class="empty-state"><span class="material-icons" style="font-size:36px;color:var(--muted2);display:block;margin-bottom:8px">flight</span>Create a trip to begin</div>'
     return
   }
 
   const tripInfoBar = `
     <div class="trip-info-bar">
-      <span class="trip-info-label">📅 Start date</span>
+      <span class="trip-info-label"><span class="material-icons" style="font-size:14px;vertical-align:middle">calendar_today</span> Start date</span>
       <input type="date" class="trip-date-input" value="${esc(t.startDate||'')}"
         onchange="setStartDate(this.value)" title="Trip start date">
     </div>`
 
   if (!t.days.length) {
-    list.innerHTML = tripInfoBar + '<div class="empty-state"><div class="big">📅</div>Add a day to start planning</div>'
+    list.innerHTML = tripInfoBar + '<div class="empty-state"><span class="material-icons" style="font-size:36px;color:var(--muted2);display:block;margin-bottom:8px">calendar_today</span>Add a day to start planning</div>'
     return
   }
 
@@ -1402,7 +1402,7 @@ function renderSidebar() {
         <div class="tl-stop hotel-stop">
           <div class="tl-dot" style="background:${color}">H</div>
           ${timeRange ? `<span class="tl-time-chip" style="color:${color};background:${color}26">${timeRange}</span>` : ''}
-          <span class="tl-name">🏨 ${esc(stop.name)}</span>
+          <span class="tl-name">${mi('hotel','14px')} ${esc(stop.name)}</span>
         </div>` : `
         <div class="tl-stop ${isStopSelected ? 'selected' : ''}"
           draggable="true"
@@ -1414,7 +1414,7 @@ function renderSidebar() {
           onclick="selectStop('${day.id}','${stop.id}')">
           <div class="tl-dot" style="background:${color}">${realSi + 1}</div>
           <div class="tl-actions">
-            <button class="stop-btn" onmousedown="showStopMenu('${stop.id}','${day.id}',this);event.stopPropagation()" title="Options">⋮</button>
+            <button class="stop-btn" onmousedown="showStopMenu('${stop.id}','${day.id}',this);event.stopPropagation()" title="Options"><span class="material-icons" style="font-size:18px">more_vert</span></button>
           </div>
           ${timeRange ? `<span class="tl-time-chip" style="color:${color};background:${color}26">${timeRange}</span>` : ''}
           <span class="tl-name">${esc(stop.name)}</span>
@@ -1442,7 +1442,7 @@ function renderSidebar() {
         legHtml = `
           <div class="tl-leg ${isLegSelected ? 'selected' : ''}" onclick="selectLeg('${day.id}',${si});event.stopPropagation()">
             <div class="tl-leg-inner">
-              ${modeIconHtml(modeData.icon,'13px')}
+              ${mi(modeData.icon,'13px')}
               <span>${legText}</span>
             </div>
           </div>`
@@ -1460,7 +1460,7 @@ function renderSidebar() {
           <input type="time" class="time-input" value="${esc(day.departureTime||'')}"
             title="Departure time"
             onchange="setDeparture('${day.id}',this.value)">
-          <button class="day-del" onclick="removeDay('${day.id}')">×</button>
+          <button class="day-del" onclick="removeDay('${day.id}')"><span class="material-icons" style="font-size:16px">close</span></button>
         </div>
         ${stopsHtml}
         <div class="day-dropzone"
@@ -1490,7 +1490,7 @@ function renderHotels() {
       <div class="search-dropdown"></div>
     </div>`
 
-  if (!t) { list.innerHTML = searchWrap + '<div class="empty-state"><div class="big">🏨</div>Select a trip first</div>'; return }
+  if (!t) { list.innerHTML = searchWrap + '<div class="empty-state"><span class="material-icons" style="font-size:36px;color:var(--muted2);display:block;margin-bottom:8px">hotel</span>Select a trip first</div>'; return }
 
   const hotels = t.hotels || []
   const dayCount = t.days.length
@@ -1506,11 +1506,11 @@ function renderHotels() {
     return `
       <div class="hotel-card">
         <div class="hotel-name">
-          🏨 ${esc(h.name)}
-          <button class="hotel-del" onclick="removeHotel('${h.id}')">×</button>
+          ${mi('hotel','15px')} ${esc(h.name)}
+          <button class="hotel-del" onclick="removeHotel('${h.id}')"><span class="material-icons" style="font-size:16px">close</span></button>
         </div>
-        ${h.address ? `<div class="hotel-addr">📍 ${esc(h.address)}</div>` : ''}
-        ${h.phone   ? `<div class="hotel-phone">📞 ${esc(h.phone)}</div>` : ''}
+        ${h.address ? `<div class="hotel-addr">${mi('location_on','13px')} ${esc(h.address)}</div>` : ''}
+        ${h.phone   ? `<div class="hotel-phone">${mi('phone','13px')} ${esc(h.phone)}</div>` : ''}
         <div class="hotel-nights">
           <div class="hotel-nights-label">Stay which nights?</div>
           <div class="nights-row">${nightBtns}</div>
@@ -1521,7 +1521,7 @@ function renderHotels() {
       </div>`
   }).join('')
 
-  list.innerHTML = searchWrap + (hotels.length ? hotelsHtml : '<div class="empty-state"><div class="big">🏨</div>No hotels yet</div>')
+  list.innerHTML = searchWrap + (hotels.length ? hotelsHtml : '<div class="empty-state"><span class="material-icons" style="font-size:36px;color:var(--muted2);display:block;margin-bottom:8px">hotel</span>No hotels yet</div>')
 }
 
 // ── Map render ─────────────────────────────────────────────────────────────
@@ -1538,7 +1538,7 @@ function renderMap() {
     eff.forEach((stop, si) => {
       if (!stop.lat || !stop.lng) return
       const pos = { lat: stop.lat, lng: stop.lng }
-      const label = stop._virtual ? '🏨' : String(day.stops.indexOf(stop) + 1)
+      const label = stop._virtual ? 'H' : String(day.stops.indexOf(stop) + 1)
       markers.push(new google.maps.Marker({
         position: pos, map, title: stop.name,
         label: stop._virtual
