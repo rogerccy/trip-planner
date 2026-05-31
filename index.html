@@ -255,15 +255,14 @@
     .hotel-search:focus { border-color: var(--accent); border-style: solid; }
     .hotel-search::placeholder { color: var(--muted); }
     .hotel-card {
-      display: flex; align-items: center; gap: 6px;
       padding: 5px 4px; border-radius: 6px; cursor: pointer;
       border: 1px solid transparent; transition: background 0.1s, border-color 0.1s;
-      margin-bottom: 2px;
+      margin-bottom: 4px;
     }
     .hotel-card:hover { background: rgba(255,255,255,0.025); }
     .hotel-card.selected { background: rgba(255,255,255,0.06); border-color: var(--muted2); }
+    .hotel-card-row { display: flex; align-items: center; gap: 6px; }
     .hotel-card-name { font-size: 13px; font-weight: 500; color: var(--text); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .hotel-card-nights { font-size: 11px; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
     .hotel-card-actions { display: none; align-items: center; flex-shrink: 0; }
     .hotel-card:hover .hotel-card-actions { display: flex; }
     .hotel-nights { margin-bottom: 10px; }
@@ -923,14 +922,6 @@ function renderDetailPanel() {
   } else if (selectedPanel.type === 'hotel') {
     const { hotelId } = selectedPanel
     const hotel = (t.hotels || []).find(h => h.id === hotelId); if (!hotel) return
-    const dayCount = t.days.length
-    const nightBtns = dayCount > 1
-      ? Array.from({ length: dayCount - 1 }, (_, i) => {
-          const nightIdx = i + 1
-          const on = hotel.nights.includes(nightIdx)
-          return `<button class="night-btn ${on ? 'on' : ''}" onclick="toggleNight('${hotel.id}',${nightIdx})" title="Night between Day ${nightIdx} and Day ${nightIdx + 1}">${nightIdx}</button>`
-        }).join('')
-      : '<span style="color:var(--muted);font-size:11px">Add at least 2 days first</span>'
     inner.innerHTML = `
       <div class="panel-header">
         <button class="panel-back" onclick="closePanel()"><span class="material-icons" style="font-size:20px">arrow_back</span></button>
@@ -945,10 +936,6 @@ function renderDetailPanel() {
           <div class="panel-label">Phone</div>
           <div class="panel-addr">${mi('phone','14px')} ${esc(hotel.phone)}</div>
         </div>` : ''}
-        <div class="panel-section">
-          <div class="panel-label">Stay which nights?</div>
-          <div class="nights-row">${nightBtns}</div>
-        </div>
         <div class="panel-section">
           <div class="panel-label">Notes</div>
           <textarea class="stop-note" placeholder="Add notes…"
@@ -1568,16 +1555,23 @@ function renderHotels() {
 
   const hotelsHtml = hotels.map(h => {
     const isSelected = selectedPanel?.type === 'hotel' && selectedPanel?.hotelId === h.id
-    const validNights = h.nights.filter(n => n > 0).sort((a,b)=>a-b)
-    const nightsSummary = validNights.length ? `N${validNights.join(',')}` : ''
+    const nightBtns = dayCount > 1
+      ? Array.from({ length: dayCount - 1 }, (_, i) => {
+          const nightIdx = i + 1
+          const on = h.nights.includes(nightIdx)
+          return `<button class="night-btn ${on ? 'on' : ''}" onclick="event.stopPropagation();toggleNight('${h.id}',${nightIdx})" title="Night between Day ${nightIdx} and Day ${nightIdx + 1}">${nightIdx}</button>`
+        }).join('')
+      : ''
     return `
       <div class="hotel-card ${isSelected ? 'selected' : ''}" onclick="selectHotel('${h.id}')">
-        <span class="material-icons" style="font-size:15px;color:var(--muted);flex-shrink:0">hotel</span>
-        <span class="hotel-card-name">${esc(h.name)}</span>
-        ${nightsSummary ? `<span class="hotel-card-nights">${nightsSummary}</span>` : ''}
-        <div class="hotel-card-actions" onclick="event.stopPropagation()">
-          <button class="tl-act-btn danger" title="Delete hotel" onclick="removeHotel('${h.id}')">${mi('delete_outline','14px')}</button>
+        <div class="hotel-card-row">
+          <span class="material-icons" style="font-size:15px;color:var(--muted);flex-shrink:0">hotel</span>
+          <span class="hotel-card-name">${esc(h.name)}</span>
+          <div class="hotel-card-actions" onclick="event.stopPropagation()">
+            <button class="tl-act-btn danger" title="Delete hotel" onclick="removeHotel('${h.id}')">${mi('delete_outline','14px')}</button>
+          </div>
         </div>
+        ${nightBtns ? `<div class="nights-row" style="margin-top:5px">${nightBtns}</div>` : ''}
       </div>`
   }).join('')
 
