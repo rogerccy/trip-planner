@@ -679,6 +679,9 @@ window._mapLoaded = function() {
     styles: darkStyle()
   })
   renderMap()
+  // Trigger route calculation for loaded data (legs are stripped from localStorage)
+  const t = activeTrip()
+  if (t) t.days.forEach(day => recalcDay(day, t))
 }
 
 function initMap() {
@@ -721,6 +724,7 @@ function renderTripSelect() {
     S.activeTripId = sel.value
     localStorage.setItem('tp_active', sel.value)
     renderSidebar(); renderHotels(); renderMap()
+    const nt = activeTrip(); if (nt && map) nt.days.forEach(day => recalcDay(day, nt))
   }
 }
 
