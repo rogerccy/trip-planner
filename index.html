@@ -118,9 +118,9 @@
     .tl-left { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
     .tl-drag { font-size: 12px; color: var(--muted2); cursor: grab; user-select: none; line-height: 1; margin-bottom: 3px; }
     .tl-dot {
-      width: 22px; height: 22px; border-radius: 50%;
+      width: 16px; height: 16px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 700; color: #0d0d0d; flex-shrink: 0;
+      font-size: 9px; font-weight: 700; color: #0d0d0d; flex-shrink: 0;
     }
     .tl-content { flex: 1; min-width: 0; cursor: pointer; }
     .tl-header { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
@@ -176,16 +176,19 @@
     .leg-steps-toggle { background: none; border: none; color: var(--muted); font-size: 11px; cursor: pointer; padding: 1px 4px; }
     .leg-steps-toggle:hover { color: var(--sub); }
 
-    /* ── Stop buttons ── */
-    .stop-btn {
+    /* ── Stop hover actions ── */
+    .tl-stop-actions { display: none; align-items: center; gap: 1px; margin-left: auto; flex-shrink: 0; position: relative; }
+    .tl-stop:hover .tl-stop-actions { display: flex; }
+    .tl-act-btn {
       background: none; border: none; color: var(--muted); cursor: pointer;
-      font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 3px;
+      padding: 2px 3px; border-radius: 3px; display: flex; align-items: center; line-height: 1;
     }
-    .stop-btn:hover { color: var(--sub); background: var(--surface3); }
+    .tl-act-btn:hover { color: var(--sub); background: var(--surface3); }
+    .tl-act-btn.danger:hover { color: var(--danger); background: rgba(200,80,80,0.08); }
 
     /* ── Copy menu ── */
     .copy-menu {
-      position: absolute; right: 0; top: 100%; margin-top: 2px;
+      position: absolute; right: 0; top: calc(100% + 2px);
       background: var(--surface3); border: 1px solid var(--muted2);
       border-radius: var(--radius); z-index: 400; min-width: 130px; overflow: hidden;
     }
@@ -404,8 +407,8 @@
 <div id="main">
   <div id="sidebar">
     <div class="sidebar-tabs">
-      <div class="sidebar-tab active" id="tab-itin" onclick="switchTab('itin')"><span class="material-icons" style="font-size:15px;vertical-align:middle">calendar_today</span> Itinerary</div>
-      <div class="sidebar-tab" id="tab-hotels" onclick="switchTab('hotels')"><span class="material-icons" style="font-size:15px;vertical-align:middle">hotel</span> Hotels</div>
+      <div class="sidebar-tab active" id="tab-itin" onclick="switchTab('itin')" title="Itinerary"><span class="material-icons" style="font-size:18px">calendar_today</span></div>
+      <div class="sidebar-tab" id="tab-hotels" onclick="switchTab('hotels')" title="Hotels"><span class="material-icons" style="font-size:18px">hotel</span></div>
     </div>
     <div id="days-list"></div>
     <div id="hotels-list"></div>
@@ -594,14 +597,16 @@ function formatHoursText(stop, date) {
 function getEffectiveStops(day, dayIndex, trip) {
   const eff = []
   const hotels = trip.hotels || []
-  // Prepend: hotel with nights.includes(dayIndex - 1)
+  // Night index is 1-based: night k = between Day k and Day k+1
+  // Prepend: hotel that was stayed the night before this day (night = dayIndex, since day is 0-indexed)
+  // Guard dayIndex > 0 so Day 1 never gets a hotel prepended (no night "before Day 1")
   if (dayIndex > 0) {
-    const prev = hotels.find(h => h.nights && h.nights.includes(dayIndex - 1))
+    const prev = hotels.find(h => h.nights && h.nights.includes(dayIndex))
     if (prev) eff.push({ ...prev, _virtual: true, _hotelId: prev.id, legMode: prev.legMode || 'DRIVE', dwellMinutes: 0 })
   }
   for (const s of day.stops) eff.push(s)
-  // Append: hotel with nights.includes(dayIndex)
-  const next = hotels.find(h => h.nights && h.nights.includes(dayIndex))
+  // Append: hotel staying tonight (night = dayIndex + 1, i.e. after this day)
+  const next = hotels.find(h => h.nights && h.nights.includes(dayIndex + 1))
   if (next) eff.push({ ...next, _virtual: true, _hotelId: next.id, legMode: next.legMode || 'DRIVE', dwellMinutes: 0 })
   return eff
 }
@@ -786,6 +791,7 @@ function addStop(dayId, place) {
 function removeStop(dayId, stopId) {
   const t = activeTrip(); if (!t) return
   const day = t.days.find(d => d.id === dayId); if (!day) return
+  closePanel()
   day.stops = day.stops.filter(s => s.id !== stopId)
   day._legs = null
   renderSidebar(); renderMap()
@@ -804,21 +810,18 @@ function copyStop(stopId, fromDayId, toDayId) {
   recalcDay(toDay, t); scheduleSave()
 }
 
-function showStopMenu(stopId, dayId, btn) {
+function showCopyMenu(stopId, dayId, btn) {
   hideCopyMenu()
   const t = activeTrip(); if (!t) return
+  const otherDays = t.days.filter(d => d.id !== dayId)
+  if (!otherDays.length) return
   const menu = document.createElement('div')
   menu.className = 'copy-menu'; menu.id = 'copy-menu'
-  const otherDays = t.days.filter(d => d.id !== dayId)
-  let html = ''
-  if (otherDays.length) {
-    html += `<div class="copy-menu-title">Copy to</div>`
-    html += otherDays.map(d => `<div class="copy-opt" onmousedown="copyStop('${stopId}','${dayId}','${d.id}')">${esc(d.label)}</div>`).join('')
-  }
-  html += `<div class="copy-opt danger" onmousedown="removeStop('${dayId}','${stopId}')">${mi('delete_outline','14px')} Delete</div>`
+  let html = `<div class="copy-menu-title">Copy to</div>`
+  html += otherDays.map(d => `<div class="copy-opt" onmousedown="copyStop('${stopId}','${dayId}','${d.id}')">${esc(d.label)}</div>`).join('')
   menu.innerHTML = html
   menu.addEventListener('click', e => e.stopPropagation())
-  btn.closest('.tl-actions').appendChild(menu)
+  btn.closest('.tl-stop-actions').appendChild(menu)
   setTimeout(() => document.addEventListener('click', hideCopyMenu, { once: true }), 100)
 }
 
@@ -1020,12 +1023,20 @@ function toggleNight(hotelId, nightIdx) {
   const t = activeTrip(); if (!t) return
   const hotel = t.hotels.find(h => h.id === hotelId); if (!hotel) return
   const i = hotel.nights.indexOf(nightIdx)
-  if (i >= 0) hotel.nights.splice(i, 1); else hotel.nights.push(nightIdx)
+  if (i >= 0) {
+    hotel.nights.splice(i, 1)
+  } else {
+    // Remove this night from any other hotel that already owns it
+    for (const h of t.hotels) {
+      if (h.id !== hotelId) h.nights = h.nights.filter(n => n !== nightIdx)
+    }
+    hotel.nights.push(nightIdx)
+  }
   // Recalc affected days
   for (const [di, day] of t.days.entries()) {
     if (day._eff) { day._eff = null; day._legs = null }
   }
-  renderSidebar(); renderMap(); scheduleSave()
+  renderSidebar(); renderHotels(); renderMap(); scheduleSave()
   // Recalc all days (hotel injection affects routes)
   for (const [di, day] of t.days.entries()) recalcDay(day, t)
 }
@@ -1413,12 +1424,13 @@ function renderSidebar() {
           ondragend="dragEnd()"
           onclick="selectStop('${day.id}','${stop.id}')">
           <div class="tl-dot" style="background:${color}">${realSi + 1}</div>
-          <div class="tl-actions">
-            <button class="stop-btn" onmousedown="showStopMenu('${stop.id}','${day.id}',this);event.stopPropagation()" title="Options"><span class="material-icons" style="font-size:18px">more_vert</span></button>
-          </div>
           ${timeRange ? `<span class="tl-time-chip" style="color:${color};background:${color}26">${timeRange}</span>` : ''}
           <span class="tl-name">${esc(stop.name)}</span>
           ${hoursPill}
+          <div class="tl-stop-actions" onclick="event.stopPropagation()">
+            ${t.days.length > 1 ? `<button class="tl-act-btn" title="Copy to day" onmousedown="showCopyMenu('${stop.id}','${day.id}',this);event.stopPropagation()">${mi('content_copy','14px')}</button>` : ''}
+            <button class="tl-act-btn danger" title="Delete stop" onclick="removeStop('${day.id}','${stop.id}')">${mi('delete_outline','14px')}</button>
+          </div>
         </div>`
 
       // Leg row
@@ -1496,12 +1508,13 @@ function renderHotels() {
   const dayCount = t.days.length
 
   const hotelsHtml = hotels.map(h => {
-    const nightBtns = dayCount > 0
-      ? Array.from({ length: dayCount }, (_, i) => {
-          const on = h.nights.includes(i)
-          return `<button class="night-btn ${on ? 'on' : ''}" onclick="toggleNight('${h.id}',${i})" title="Night between Day ${i+1} and Day ${i+2}">${i + 1}</button>`
+    const nightBtns = dayCount > 1
+      ? Array.from({ length: dayCount - 1 }, (_, i) => {
+          const nightIdx = i + 1  // Night k = between Day k and Day k+1
+          const on = h.nights.includes(nightIdx)
+          return `<button class="night-btn ${on ? 'on' : ''}" onclick="toggleNight('${h.id}',${nightIdx})" title="Night between Day ${nightIdx} and Day ${nightIdx + 1}">${nightIdx}</button>`
         }).join('')
-      : '<span style="color:var(--muted);font-size:11px">Add days first</span>'
+      : '<span style="color:var(--muted);font-size:11px">Add at least 2 days first</span>'
 
     return `
       <div class="hotel-card">
