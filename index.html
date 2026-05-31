@@ -658,7 +658,7 @@ function boot() {
   renderHotels()
 
   if (S.apiKey) loadGoogleMaps()
-  if (S.pat && S.gistId) syncGist()
+  if (S.pat) pullGist()
 }
 
 // ── Tab switching ──────────────────────────────────────────────────────────
@@ -1627,32 +1627,35 @@ async function findGist() {
   }
 }
 
-async function syncGist() {
-  if (!S.pat) { setStatus('No PAT — Gist sync skipped'); return }
-  setStatus('Syncing…')
+async function pullGist() {
+  if (!S.pat) return
+  setStatus('Loading from Gist…')
   try {
     if (!S.gistId) {
       S.gistId = await findGist() || ''
       localStorage.setItem('tp_gist', S.gistId)
     }
-    if (S.gistId) {
-      const res = await fetch(`https://api.github.com/gists/${S.gistId}`, {
-        headers: { Authorization: `token ${S.pat}` }
-      })
-      const gist = await res.json()
-      const content = gist.files?.[GIST_FILE]?.content
-      if (content) {
-        try {
-          DATA = JSON.parse(content)
-          for (const t of DATA.trips) { if (!t.hotels) t.hotels = [] }
-          renderTripSelect(); renderSidebar(); renderHotels(); renderMap()
-          if (map) { const at = activeTrip(); if (at) at.days.forEach(day => { if (day._legs === null) recalcDay(day, at) }) }
-          setStatus('Synced from Gist ✓'); return
-        } catch(e) {}
-      }
+    if (!S.gistId) { setStatus('No Gist found — using local data'); return }
+    const res = await fetch(`https://api.github.com/gists/${S.gistId}`, {
+      headers: { Authorization: `token ${S.pat}` }
+    })
+    const gist = await res.json()
+    const content = gist.files?.[GIST_FILE]?.content
+    if (content) {
+      DATA = JSON.parse(content)
+      for (const t of DATA.trips) { if (!t.hotels) t.hotels = [] }
+      save()
+      renderTripSelect(); renderSidebar(); renderHotels(); renderMap()
+      if (map) { const at = activeTrip(); if (at) at.days.forEach(day => { if (day._legs === null) recalcDay(day, at) }) }
+      setStatus('Loaded from Gist ✓')
+    } else {
+      setStatus('Gist empty — using local data')
     }
-    await pushGist()
-  } catch(e) { setStatus('Sync error: ' + e.message) }
+  } catch(e) { setStatus('Load error: ' + e.message) }
+}
+
+async function syncGist() {
+  await pushGist()
 }
 
 async function pushGist() {
@@ -1694,7 +1697,7 @@ function saveSettings() {
   localStorage.setItem('tp_cb', S.colorblind ? '1' : '')
   hideSettings()
   if (S.apiKey && (keyChanged || !window.google?.maps)) loadGoogleMaps()
-  if (S.pat) syncGist()
+  if (S.pat) pullGist()
   renderSidebar(); renderHotels(); renderMap()
 }
 
