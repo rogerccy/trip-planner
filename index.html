@@ -635,8 +635,16 @@ function boot() {
   const raw = localStorage.getItem('tp_data')
   if (raw) try { DATA = JSON.parse(raw) } catch(e) {}
 
-  // Ensure all trips have hotels array
-  for (const t of DATA.trips) { if (!t.hotels) t.hotels = [] }
+  // Ensure all trips have hotels array; rebuild derived caches for days with saved _legs
+  for (const t of DATA.trips) {
+    if (!t.hotels) t.hotels = []
+    for (const [di, day] of t.days.entries()) {
+      if (day._legs) {
+        day._eff = getEffectiveStops(day, di, t)
+        day._timeline = computeTimeline(day, day._eff, day._legs)
+      }
+    }
+  }
 
   renderTripSelect()
   renderSidebar()
@@ -679,9 +687,9 @@ window._mapLoaded = function() {
     styles: darkStyle()
   })
   renderMap()
-  // Trigger route calculation for loaded data (legs are stripped from localStorage)
+  // Only recalc days whose leg cache is missing (not yet calculated or cache was cleared)
   const t = activeTrip()
-  if (t) t.days.forEach(day => recalcDay(day, t))
+  if (t) t.days.forEach(day => { if (day._legs === null) recalcDay(day, t) })
 }
 
 function initMap() {
@@ -724,7 +732,7 @@ function renderTripSelect() {
     S.activeTripId = sel.value
     localStorage.setItem('tp_active', sel.value)
     renderSidebar(); renderHotels(); renderMap()
-    const nt = activeTrip(); if (nt && map) nt.days.forEach(day => recalcDay(day, nt))
+    const nt = activeTrip(); if (nt && map) nt.days.forEach(day => { if (day._legs === null) recalcDay(day, nt) })
   }
 }
 
@@ -1581,7 +1589,9 @@ function clearMapOverlays() {
 function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 1200) }
 
 function save() {
-  localStorage.setItem('tp_data', JSON.stringify(DATA, (k, v) => k.startsWith('_') ? undefined : v))
+  // Keep _legs in localStorage as a cache; strip volatile runtime fields only
+  const SKIP = new Set(['_virtual','_hotelId','_eff','_timeline','_expanded'])
+  localStorage.setItem('tp_data', JSON.stringify(DATA, (k, v) => SKIP.has(k) ? undefined : v))
   localStorage.setItem('tp_active', S.activeTripId || '')
   setStatus('Saved locally')
   if (S.pat) pushGist()
@@ -1621,6 +1631,7 @@ async function syncGist() {
           DATA = JSON.parse(content)
           for (const t of DATA.trips) { if (!t.hotels) t.hotels = [] }
           renderTripSelect(); renderSidebar(); renderHotels(); renderMap()
+          if (map) { const at = activeTrip(); if (at) at.days.forEach(day => { if (day._legs === null) recalcDay(day, at) }) }
           setStatus('Synced from Gist ✓'); return
         } catch(e) {}
       }
