@@ -103,11 +103,10 @@
 
     /* ── Timeline stops ── */
     .tl-stop {
-      display: flex; align-items: flex-start; gap: 8px;
+      display: flex; align-items: center; gap: 6px;
       padding: 5px 4px; border-radius: 6px;
-      cursor: grab; border: 1px solid transparent;
-      transition: border-color 0.1s, opacity 0.1s;
-      position: relative;
+      cursor: pointer; border: 1px solid transparent;
+      transition: background 0.1s, border-color 0.1s, opacity 0.1s;
     }
     .tl-stop:hover { background: rgba(255,255,255,0.025); }
     .tl-stop.dragging { opacity: 0.3; }
@@ -342,7 +341,51 @@
       #main { flex-direction: column-reverse; }
       #sidebar { width: 100%; height: 48vh; border-right: none; border-top: 1px solid var(--muted2); }
       #map-wrap { height: 52vh; }
+      #detail-panel.open { width: 100%; }
     }
+
+    /* ── Detail panel ── */
+    #detail-panel {
+      width: 0; flex-shrink: 0; overflow: hidden;
+      transition: width 0.22s cubic-bezier(0.4,0,0.2,1);
+      background: var(--surface2); border-right: 1px solid var(--muted2);
+      display: flex; flex-direction: column;
+    }
+    #detail-panel.open { width: 300px; }
+    #detail-inner { width: 300px; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+    .panel-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 12px; border-bottom: 1px solid var(--muted2); flex-shrink: 0;
+    }
+    .panel-back { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 20px; line-height: 1; padding: 0 2px; }
+    .panel-back:hover { color: var(--text); }
+    .panel-title { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .panel-body { padding: 14px 12px; flex: 1; overflow-y: auto; }
+    .panel-section { margin-bottom: 16px; }
+    .panel-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+    .panel-addr { font-size: 12px; color: var(--sub); line-height: 1.5; }
+    .panel-timeline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .leg-summary { font-size: 14px; font-weight: 600; color: var(--text); }
+    .leg-taxi { font-size: 12px; color: var(--accent); margin-top: 3px; }
+    .mode-picker-row { display: flex; gap: 4px; flex-wrap: wrap; }
+
+    /* Selected stop / leg in sidebar */
+    .tl-stop.selected { background: rgba(255,255,255,0.06); border-color: var(--muted2) !important; }
+    .tl-leg.selected .tl-leg-inner { color: var(--accent); }
+
+    /* Route vertical timeline */
+    .route-timeline { display: flex; flex-direction: column; }
+    .rt-step { display: flex; gap: 0; }
+    .rt-left { display: flex; flex-direction: column; align-items: center; width: 30px; flex-shrink: 0; padding-top: 3px; }
+    .rt-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+    .rt-dot.origin, .rt-dot.dest { background: var(--accent); width: 11px; height: 11px; }
+    .rt-vline { width: 2px; background: var(--muted2); flex: 1; min-height: 22px; margin: 3px 0; }
+    .rt-vline.transit { background: var(--blue); }
+    .rt-body { flex: 1; padding-bottom: 2px; }
+    .rt-place { font-size: 12px; color: var(--text); font-weight: 500; }
+    .rt-conn-body { font-size: 11px; color: var(--muted); padding: 5px 0 3px; line-height: 1.4; }
+    .rt-conn-body.transit { color: var(--blue); }
+    .rt-conn-body.muted { font-style: italic; }
   </style>
 </head>
 <body>
@@ -368,6 +411,9 @@
     <div id="sidebar-footer">
       <button class="btn accent" style="width:100%" id="footer-btn" onclick="addDay()">+ Add Day</button>
     </div>
+  </div>
+  <div id="detail-panel">
+    <div id="detail-inner"></div>
   </div>
   <div id="map-wrap">
     <div id="map"></div>
@@ -437,7 +483,7 @@ let hotelSearchTimer = null
 let saveTimer = null
 let dragState = null
 let activeTab = 'itin'
-let editingLeg = null // 'dayId-stopIdx'
+let selectedPanel = null // { type:'stop'|'leg', key, dayId, stopId?, legIdx? }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const uid  = () => Math.random().toString(36).slice(2, 10)
@@ -766,12 +812,156 @@ function hideCopyMenu() {
   const m = $('copy-menu'); if (m) m.remove()
 }
 
-function toggleStop(dayId, stopId) {
-  const t = activeTrip(); if (!t) return
-  const day = t.days.find(d => d.id === dayId); if (!day) return
-  const stop = day.stops.find(s => s.id === stopId); if (!stop) return
-  stop._expanded = !stop._expanded
+function selectStop(dayId, stopId) {
+  const key = `stop:${dayId}:${stopId}`
+  if (selectedPanel?.key === key) { closePanel(); return }
+  selectedPanel = { type: 'stop', key, dayId, stopId }
+  renderSidebar(); renderDetailPanel()
+}
+
+function selectLeg(dayId, legIdx) {
+  const key = `leg:${dayId}:${legIdx}`
+  if (selectedPanel?.key === key) { closePanel(); return }
+  selectedPanel = { type: 'leg', key, dayId, legIdx }
+  renderSidebar(); renderDetailPanel()
+}
+
+function closePanel() {
+  selectedPanel = null
+  $('detail-panel').classList.remove('open')
   renderSidebar()
+}
+
+function renderDetailPanel() {
+  const panel = $('detail-panel')
+  const inner = $('detail-inner')
+  if (!selectedPanel) { panel.classList.remove('open'); return }
+  panel.classList.add('open')
+  const t = activeTrip(); if (!t) { panel.classList.remove('open'); return }
+
+  if (selectedPanel.type === 'stop') {
+    const { dayId, stopId } = selectedPanel
+    const day = t.days.find(d => d.id === dayId); if (!day) return
+    const stop = day.stops.find(s => s.id === stopId); if (!stop) return
+    const di = t.days.indexOf(day)
+    const tripDate = getTripDate(t, di)
+    const eff = day._eff || getEffectiveStops(day, di, t)
+    const si = eff.findIndex(s => s.id === stopId)
+    const tlEntry = day._timeline?.[si]
+    const arrivalMins = tlEntry?.arrive ?? null
+    const departMins  = tlEntry?.depart ?? null
+    const status = (tripDate && arrivalMins != null) ? hoursStatus(stop, arrivalMins, tripDate) : 'unknown'
+    const hoursText = formatHoursText(stop, tripDate)
+    inner.innerHTML = `
+      <div class="panel-header">
+        <button class="panel-back" onclick="closePanel()">←</button>
+        <div class="panel-title">${esc(stop.name)}</div>
+      </div>
+      <div class="panel-body">
+        ${stop.address ? `<div class="panel-section">
+          <div class="panel-label">Location</div>
+          <div class="panel-addr">${esc(stop.address)}</div>
+        </div>` : ''}
+        <div class="panel-section">
+          <div class="panel-label">Time</div>
+          <div class="panel-timeline">
+            ${arrivalMins != null ? `<span class="tl-label">Arrive</span><span class="tl-time">${fmtTime(arrivalMins)}</span>` : ''}
+            <span class="tl-label">Stay</span>
+            <select class="dwell-sel" onchange="setDwell('${day.id}','${stop.id}',+this.value)">
+              ${DWELL_OPTS.map(o => `<option value="${o.v}" ${stop.dwellMinutes === o.v ? 'selected' : ''}>${o.l}</option>`).join('')}
+            </select>
+            ${departMins != null ? `<span class="tl-label">Leave</span><span class="tl-time">${fmtTime(departMins)}</span>` : ''}
+          </div>
+        </div>
+        ${status !== 'unknown' ? `<div class="panel-section">
+          <div class="panel-label">Hours</div>
+          <div class="hours-badge ${status}">${status === 'open' ? '✓ Open' : '✕ Closed'}</div>
+          ${hoursText ? `<div class="hours-text" style="margin-top:5px">${esc(hoursText)}</div>` : ''}
+        </div>` : ''}
+        <div class="panel-section">
+          <div class="panel-label">Notes</div>
+          <textarea class="stop-note" placeholder="Add notes…"
+            onchange="setStopNote('${day.id}','${stop.id}',this.value)"
+            onblur="setStopNote('${day.id}','${stop.id}',this.value)">${esc(stop.note || '')}</textarea>
+        </div>
+      </div>`
+
+  } else if (selectedPanel.type === 'leg') {
+    const { dayId, legIdx } = selectedPanel
+    const day = t.days.find(d => d.id === dayId); if (!day) return
+    const di = t.days.indexOf(day)
+    const eff = day._eff || getEffectiveStops(day, di, t)
+    const fromStop = eff[legIdx], toStop = eff[legIdx + 1]
+    if (!fromStop || !toStop) return
+    const leg = day._legs?.[legIdx]
+    const isVirtual = fromStop._virtual
+    const mode = fromStop.legMode || 'DRIVE'
+    const modeData = MODES.find(m => m.id === mode) || MODES[0]
+    const modes = isVirtual ? [] : (fromStop.transitModes || [])
+    const pref  = isVirtual ? '' : (fromStop.transitPref  || '')
+    const stopId = isVirtual ? fromStop._hotelId : fromStop.id
+
+    const stepsHtml = (() => {
+      if (!leg) return `<div class="rt-conn-body muted">Calculating…</div>`
+      if (!leg.steps?.length) return `<div class="rt-conn-body muted">No step details available</div>`
+      const rows = []
+      rows.push(`<div class="rt-step">
+        <div class="rt-left"><div class="rt-dot origin"></div><div class="rt-vline ${leg.steps[0]?.type==='transit'?'transit':''}"></div></div>
+        <div class="rt-body"><div class="rt-place">${esc(fromStop.name)}</div></div>
+      </div>`)
+      leg.steps.forEach((s, i) => {
+        const isLast = i === leg.steps.length - 1
+        const nextTransit = leg.steps[i+1]?.type === 'transit'
+        const connHtml = s.type === 'transit'
+          ? `<div class="rt-conn-body transit">🚇 ${esc(s.line)} · ${esc(s.from)} → ${esc(s.to)} (${s.stops} stops)</div>`
+          : s.text ? `<div class="rt-conn-body">${esc(s.text)}${s.dist?' · '+s.dist:''}</div>` : ''
+        if (connHtml) rows.push(`<div class="rt-step">
+          <div class="rt-left">${isLast?`<div class="rt-dot dest"></div>`:`<div class="rt-dot"></div><div class="rt-vline ${nextTransit?'transit':''}"></div>`}</div>
+          <div class="rt-body">${connHtml}</div>
+        </div>`)
+      })
+      rows.push(`<div class="rt-step">
+        <div class="rt-left"><div class="rt-dot dest"></div></div>
+        <div class="rt-body"><div class="rt-place">${esc(toStop.name)}</div></div>
+      </div>`)
+      return `<div class="route-timeline">${rows.join('')}</div>`
+    })()
+
+    inner.innerHTML = `
+      <div class="panel-header">
+        <button class="panel-back" onclick="closePanel()">←</button>
+        <div class="panel-title">${modeData.icon} ${esc(fromStop.name)} → ${esc(toStop.name)}</div>
+      </div>
+      <div class="panel-body">
+        ${leg ? `<div class="panel-section">
+          <div class="leg-summary">${leg.label}</div>
+          ${leg.taxiFare ? `<div class="leg-taxi">🚕 Taxi ~${leg.taxiFare}</div>` : ''}
+        </div>` : ''}
+        <div class="panel-section">
+          <div class="panel-label">Travel mode</div>
+          <div class="mode-picker-row">
+            ${MODES.map(m => `<button class="mp-btn ${mode===m.id?'active':''}" onclick="pickLegMode('${dayId}','${stopId}','${m.id}')">${m.icon} ${m.label}</button>`).join('')}
+          </div>
+        </div>
+        ${mode === 'TRANSIT' && !isVirtual ? `<div class="panel-section">
+          <div class="panel-label">Transit options</div>
+          <div class="transit-sub" style="padding:0;margin-bottom:6px">
+            <button class="t-btn ${modes.includes('SUBWAY')?'on':''}" onclick="toggleTransitMode('${dayId}','${fromStop.id}','SUBWAY')">🚇 MRT</button>
+            <button class="t-btn ${modes.includes('TRAIN')?'on':''}" onclick="toggleTransitMode('${dayId}','${fromStop.id}','TRAIN')">🚆 Train</button>
+            <button class="t-btn ${modes.includes('BUS')?'on':''}" onclick="toggleTransitMode('${dayId}','${fromStop.id}','BUS')">🚌 Bus</button>
+          </div>
+          <select class="pref-sel" style="width:100%" onchange="setTransitPref('${dayId}','${fromStop.id}',this.value)">
+            <option value="" ${pref===''?'selected':''}>Default</option>
+            <option value="FEWER_TRANSFERS" ${pref==='FEWER_TRANSFERS'?'selected':''}>Fewer transfers</option>
+            <option value="LESS_WALKING" ${pref==='LESS_WALKING'?'selected':''}>Less walking</option>
+          </select>
+        </div>` : ''}
+        <div class="panel-section">
+          <div class="panel-label">Route</div>
+          ${stepsHtml}
+        </div>
+      </div>`
+  }
 }
 
 function setDwell(dayId, stopId, val) {
@@ -779,7 +969,7 @@ function setDwell(dayId, stopId, val) {
   const day = t.days.find(d => d.id === dayId); if (!day) return
   const stop = day.stops.find(s => s.id === stopId); if (!stop) return
   stop.dwellMinutes = val
-  recomputeTimeline(day); renderSidebar(); scheduleSave()
+  recomputeTimeline(day); renderSidebar(); renderDetailPanel(); scheduleSave()
 }
 
 function setStopNote(dayId, stopId, val) {
@@ -865,7 +1055,7 @@ function toggleTransitMode(dayId, stopId, mode) {
   if (!stop.transitModes) stop.transitModes = []
   const i = stop.transitModes.indexOf(mode)
   if (i >= 0) stop.transitModes.splice(i, 1); else stop.transitModes.push(mode)
-  renderSidebar()
+  renderSidebar(); renderDetailPanel()
   const eff = day._eff || getEffectiveStops(day, t.days.indexOf(day), t)
   const si = eff.findIndex(s => s.id === stopId)
   if (si >= 0) calcAndRenderLeg(day, si, t)
@@ -877,37 +1067,27 @@ function setTransitPref(dayId, stopId, val) {
   const day = t.days.find(d => d.id === dayId); if (!day) return
   const stop = day.stops.find(s => s.id === stopId); if (!stop) return
   stop.transitPref = val
+  renderDetailPanel()
   const eff = day._eff || getEffectiveStops(day, t.days.indexOf(day), t)
   const si = eff.findIndex(s => s.id === stopId)
   if (si >= 0) calcAndRenderLeg(day, si, t)
   scheduleSave()
 }
 
-function toggleLeg(dayId, legIdx) {
-  const t = activeTrip(); if (!t) return
-  const day = t.days.find(d => d.id === dayId); if (!day) return
-  if (day._legs?.[legIdx]) {
-    day._legs[legIdx].expanded = !day._legs[legIdx].expanded
-    renderSidebar()
-  }
-}
-
-function toggleModePicker(dayId, si) {
-  const key = `${dayId}-${si}`
-  editingLeg = editingLeg === key ? null : key
-  renderSidebar()
-}
-
 function pickLegMode(dayId, stopId, mode) {
-  editingLeg = null
   const t = activeTrip(); if (!t) return
   const day = t.days.find(d => d.id === dayId); if (!day) return
-  const si = day.stops.findIndex(s => s.id === stopId); if (si < 0) return
+  // stopId may be a hotel id for virtual stops
+  const si = day.stops.findIndex(s => s.id === stopId)
+  if (si < 0) {
+    const hotel = (t.hotels||[]).find(h => h.id === stopId)
+    if (hotel) { hotel.legMode = mode; renderSidebar(); renderDetailPanel(); scheduleSave() }
+    return
+  }
   day.stops[si].legMode = mode
   if (day._legs) day._legs[si] = null
-  renderSidebar()
-  calcAndRenderLeg(day, si)
-  scheduleSave()
+  renderSidebar(); renderDetailPanel()
+  calcAndRenderLeg(day, si); scheduleSave()
 }
 
 // ── Timeline recompute ────────────────────────────────────────────────────
@@ -1006,7 +1186,7 @@ async function calcAndRenderLeg(day, i, trip) {
     day._legs[i] = null
   }
   day._timeline = computeTimeline(day, day._eff, day._legs)
-  renderSidebar(); drawPolylines()
+  renderSidebar(); drawPolylines(); renderDetailPanel()
 }
 
 // ── Place / Hotel search ───────────────────────────────────────────────────
@@ -1199,74 +1379,40 @@ function renderSidebar() {
         : ''
 
       const status = (!isVirtual && tripDate && arrivalMins != null) ? hoursStatus(stop, arrivalMins, tripDate) : 'unknown'
-      const hoursPill = status !== 'unknown' && !stop._expanded
+      const hoursPill = status !== 'unknown'
         ? `<span class="hi-pill ${status}">${status === 'open' ? '✓' : '✕'}</span>` : ''
+      const isStopSelected = !isVirtual && selectedPanel?.type === 'stop' && selectedPanel?.stopId === stop.id
 
-      // Expanded detail panel
-      const hoursText = formatHoursText(stop, tripDate)
-      const statusBadge = status !== 'unknown' ? `<div class="hours-badge ${status}">${status === 'open' ? '✓ Open' : status === 'holiday' ? '✕ Holiday' : '✕ Closed'}</div>` : ''
-      const expandedPanel = stop._expanded ? `
-        <div class="stop-expand">
-          <div class="addr-full">${esc(stop.address)}</div>
-          <div class="stop-timeline">
-            ${arrivalMins != null ? `<span class="tl-label">Arrive</span><span class="tl-time">${fmtTime(arrivalMins)}</span>` : ''}
-            <span class="tl-label">Stay</span>
-            <select class="dwell-sel" onchange="setDwell('${day.id}','${stop.id}',+this.value)">
-              ${DWELL_OPTS.map(o => `<option value="${o.v}" ${stop.dwellMinutes === o.v ? 'selected' : ''}>${o.l}</option>`).join('')}
-            </select>
-            ${departMins != null ? `<span class="tl-label">Depart</span><span class="tl-time">${fmtTime(departMins)}</span>` : ''}
-          </div>
-          ${statusBadge}
-          ${status !== 'unknown' && hoursText ? `<div class="hours-text">${esc(hoursText)}</div>` : ''}
-          <textarea class="stop-note" placeholder="Notes…"
-            onchange="setStopNote('${day.id}','${stop.id}',this.value)"
-            onblur="setStopNote('${day.id}','${stop.id}',this.value)">${esc(stop.note || '')}</textarea>
-        </div>` : ''
-
-      // Stop row
+      // Stop row — flat single-line layout
       const stopRow = isVirtual ? `
         <div class="tl-stop hotel-stop">
-          <div class="tl-left"><div class="tl-dot" style="background:${color}">H</div></div>
-          <div class="tl-content">
-            <div class="tl-header">
-              ${timeRange ? `<span class="tl-time-chip" style="color:${color};background:${color}26">${timeRange}</span>` : ''}
-              <span class="tl-name">🏨 ${esc(stop.name)}</span>
-            </div>
-          </div>
+          <div class="tl-dot" style="background:${color}">H</div>
+          ${timeRange ? `<span class="tl-time-chip" style="color:${color};background:${color}26">${timeRange}</span>` : ''}
+          <span class="tl-name">🏨 ${esc(stop.name)}</span>
         </div>` : `
-        <div class="tl-stop"
+        <div class="tl-stop ${isStopSelected ? 'selected' : ''}"
           draggable="true"
           ondragstart="dragStart(event,'${day.id}','${stop.id}')"
           ondragover="dragOver(event,this)"
           ondragleave="dragLeave(this)"
           ondrop="dragDrop(event,'${day.id}','${stop.id}')"
-          ondragend="dragEnd()">
-          <div class="tl-left">
-            <div class="tl-drag">⠿</div>
-            <div class="tl-dot" style="background:${color}">${realSi + 1}</div>
-          </div>
-          <div class="tl-content" onclick="toggleStop('${day.id}','${stop.id}')">
-            <div class="tl-header">
-              ${timeRange ? `<span class="tl-time-chip" style="color:${color};background:${color}26">${timeRange}</span>` : ''}
-              <span class="tl-name">${esc(stop.name)}</span>
-              ${hoursPill}
-            </div>
-            ${expandedPanel}
-          </div>
+          ondragend="dragEnd()"
+          onclick="selectStop('${day.id}','${stop.id}')">
+          <div class="tl-dot" style="background:${color}">${realSi + 1}</div>
           <div class="tl-actions">
-            <button class="stop-btn" onmousedown="showStopMenu('${stop.id}','${day.id}',this)" title="Options">⋮</button>
+            <button class="stop-btn" onmousedown="showStopMenu('${stop.id}','${day.id}',this);event.stopPropagation()" title="Options">⋮</button>
           </div>
+          ${timeRange ? `<span class="tl-time-chip" style="color:${color};background:${color}26">${timeRange}</span>` : ''}
+          <span class="tl-name">${esc(stop.name)}</span>
+          ${hoursPill}
         </div>`
 
-      // Leg section between stops (not after last stop)
+      // Leg row
       let legHtml = ''
       if (!isLast) {
         const mode = stop.legMode || 'DRIVE'
         const modeData = MODES.find(m => m.id === mode) || MODES[0]
-        const legKey = `${day.id}-${si}`
-        const isEditing = editingLeg === legKey
-        const modes = stop.transitModes || []
-        const pref  = stop.transitPref  || ''
+        const isLegSelected = selectedPanel?.type === 'leg' && selectedPanel?.dayId === day.id && selectedPanel?.legIdx === si
 
         let legText = ''
         if (day._legs === null) {
@@ -1279,46 +1425,13 @@ function renderSidebar() {
           legText = '—'
         }
 
-        const legDetailHtml = leg?.expanded ? `
-          <div class="leg-detail" style="margin-left:30px;margin-top:2px">
-            ${leg.steps.length
-              ? leg.steps.map(s => s.type === 'transit'
-                ? `<div class="step transit-step"><span class="step-icon">🚇</span><span>${esc(s.line)} · ${esc(s.from)} → ${esc(s.to)} (${s.stops} stops)</span></div>`
-                : `<div class="step"><span class="step-icon">→</span><span>${esc(s.text)}${s.dist ? ' <span style="color:var(--muted)">· '+s.dist+'</span>' : ''}</span></div>`
-              ).join('')
-              : '<div class="step no-detail">No step details</div>'
-            }
-            ${leg.taxiFare ? `<div class="step taxi"><span class="step-icon">🚕</span><span>Taxi ~${leg.taxiFare}</span></div>` : ''}
-          </div>` : ''
-
         legHtml = `
-          <div class="tl-leg ${isEditing ? 'editing' : ''}" onclick="toggleModePicker('${day.id}',${si});event.stopPropagation()">
+          <div class="tl-leg ${isLegSelected ? 'selected' : ''}" onclick="selectLeg('${day.id}',${si});event.stopPropagation()">
             <div class="tl-leg-inner">
               <span>${modeData.icon}</span>
               <span>${legText}</span>
             </div>
-          </div>
-          ${isEditing ? `
-            <div class="mode-picker-inline">
-              ${MODES.map(m => `<button class="mp-btn ${mode===m.id?'active':''}" onclick="pickLegMode('${day.id}','${isVirtual ? stop._hotelId : stop.id}','${m.id}');event.stopPropagation()">${m.icon} ${m.label}</button>`).join('')}
-            </div>
-            ${mode === 'TRANSIT' && !isVirtual ? `
-              <div class="transit-sub">
-                <button class="t-btn ${modes.includes('SUBWAY')?'on':''}" onclick="toggleTransitMode('${day.id}','${stop.id}','SUBWAY');event.stopPropagation()">🚇 MRT</button>
-                <button class="t-btn ${modes.includes('TRAIN')?'on':''}" onclick="toggleTransitMode('${day.id}','${stop.id}','TRAIN');event.stopPropagation()">🚆 Train</button>
-                <button class="t-btn ${modes.includes('BUS')?'on':''}" onclick="toggleTransitMode('${day.id}','${stop.id}','BUS');event.stopPropagation()">🚌 Bus</button>
-                <select class="pref-sel" onchange="setTransitPref('${day.id}','${stop.id}',this.value)">
-                  <option value="" ${pref===''?'selected':''}>Default</option>
-                  <option value="FEWER_TRANSFERS" ${pref==='FEWER_TRANSFERS'?'selected':''}>Fewer transfers</option>
-                  <option value="LESS_WALKING" ${pref==='LESS_WALKING'?'selected':''}>Less walking</option>
-                </select>
-              </div>` : ''}
-            ${leg ? `<div style="padding:0 0 2px 30px">
-              <button class="leg-steps-toggle" onclick="toggleLeg('${day.id}',${si});event.stopPropagation()">${leg.expanded ? '▲ Hide steps' : '▼ Show steps'}</button>
-            </div>
-            ${legDetailHtml}` : ''}
-          ` : ''}
-        `
+          </div>`
       }
 
       return stopRow + legHtml
