@@ -1234,13 +1234,21 @@ function pickLegMode(dayId, stopId, mode) {
   const day = t.days.find(d => d.id === dayId); if (!day) return
   // stopId may be a hotel id for virtual stops
   const si = day.stops.findIndex(s => s.id === stopId)
+  const di = t.days.indexOf(day)
   if (si < 0) {
     const hotel = (t.hotels||[]).find(h => h.id === stopId)
-    if (hotel) { hotel.legMode = mode; renderSidebar(); renderDetailPanel(); scheduleSave() }
+    if (hotel) {
+      hotel.legMode = mode
+      day._eff = getEffectiveStops(day, di, t)  // rebuild: virtual stop's legMode is a copy, not a ref
+      const effIdx = day._eff.findIndex(s => s._virtual && s._hotelId === stopId)
+      if (effIdx >= 0 && day._legs) day._legs[effIdx] = null
+      renderSidebar(); renderDetailPanel()
+      if (effIdx >= 0) calcAndRenderLeg(day, effIdx)
+      scheduleSave()
+    }
     return
   }
   day.stops[si].legMode = mode
-  const di = t.days.indexOf(day)
   const eff = getEffectiveStops(day, di, t)
   const effIdx = eff.findIndex(s => !s._virtual && s.id === stopId)
   if (effIdx >= 0 && day._legs) day._legs[effIdx] = null
