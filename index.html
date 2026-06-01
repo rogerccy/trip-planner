@@ -89,12 +89,41 @@
       font-size: 16px; line-height: 1; padding: 1px 4px; border-radius: 4px;
     }
     .day-del:hover { color: var(--danger); background: rgba(200,110,110,0.1); }
-    .time-input {
-      background: var(--surface3); border: 1px solid var(--muted2); color: var(--text);
-      border-radius: 4px; padding: 2px 5px; font-size: 11px; outline: none;
-      color-scheme: dark;
+    .time-chip {
+      position: relative; display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 8px 2px 5px; border-radius: 20px; cursor: pointer;
+      background: rgba(200,169,110,0.07); border: 1px solid rgba(200,169,110,0.18);
+      transition: background 0.15s, border-color 0.15s; user-select: none;
     }
-    .time-input:focus { border-color: var(--accent); }
+    .time-chip:hover { background: rgba(200,169,110,0.14); border-color: rgba(200,169,110,0.35); }
+    .time-chip.active { border-color: var(--accent); background: rgba(200,169,110,0.13); }
+    .time-chip .tc-icon { font-size: 11px !important; color: var(--muted); display: block; }
+    .time-chip .tc-val {
+      font-size: 11px; font-variant-numeric: tabular-nums; letter-spacing: 0.05em;
+      font-weight: 500; color: var(--accent);
+    }
+    .time-chip .tc-val.empty { color: var(--muted2); letter-spacing: 0.02em; }
+
+    /* Time picker popup */
+    #time-popup {
+      position: fixed; display: none; flex-direction: row; align-items: center; gap: 6px;
+      background: var(--surface2); border: 1px solid rgba(200,169,110,0.3);
+      border-radius: 10px; padding: 8px 12px; z-index: 600;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.75);
+    }
+    #time-popup.open { display: flex; }
+    .tc-spin { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+    .tc-spin-btn {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      padding: 2px 8px; border-radius: 5px; line-height: 1;
+      transition: color 0.12s, background 0.12s;
+    }
+    .tc-spin-btn:hover { color: var(--accent); background: rgba(200,169,110,0.1); }
+    .tc-spin-val {
+      font-size: 22px; font-weight: 600; color: var(--text);
+      font-variant-numeric: tabular-nums; min-width: 30px; text-align: center; line-height: 1.3;
+    }
+    .tc-colon { font-size: 20px; font-weight: 700; color: var(--muted2); padding-bottom: 2px; }
 
     /* ── Drop zone ── */
     .day-dropzone {
@@ -436,6 +465,20 @@
 
 <div id="status">Ready</div>
 
+<div id="time-popup" onclick="event.stopPropagation()">
+  <div class="tc-spin">
+    <button class="tc-spin-btn" onclick="stepTimePicker('h',1)"><span class="material-icons" style="font-size:14px">expand_less</span></button>
+    <span class="tp-h tc-spin-val">09</span>
+    <button class="tc-spin-btn" onclick="stepTimePicker('h',-1)"><span class="material-icons" style="font-size:14px">expand_more</span></button>
+  </div>
+  <span class="tc-colon">:</span>
+  <div class="tc-spin">
+    <button class="tc-spin-btn" onclick="stepTimePicker('m',5)"><span class="material-icons" style="font-size:14px">expand_less</span></button>
+    <span class="tp-m tc-spin-val">00</span>
+    <button class="tc-spin-btn" onclick="stepTimePicker('m',-5)"><span class="material-icons" style="font-size:14px">expand_more</span></button>
+  </div>
+</div>
+
 <div class="overlay" id="settings-overlay">
   <div class="modal">
     <h2><span class="material-icons" style="font-size:18px;vertical-align:middle">settings</span> Settings</h2>
@@ -663,6 +706,8 @@ function boot() {
   renderSidebar()
   renderHotels()
 
+  document.addEventListener('click', () => { if (openTimePickerId) closeTimePicker() })
+
   if (S.apiKey) loadGoogleMaps()
   if (S.pat) pullGist()
 }
@@ -771,6 +816,46 @@ function setStartDate(val) {
   const t = activeTrip(); if (!t) return
   t.startDate = val
   renderSidebar(); scheduleSave()
+}
+
+// ── Time picker popup ──────────────────────────────────────────────────────
+let openTimePickerId = null
+
+function toggleTimePicker(dayId, chipEl) {
+  if (openTimePickerId === dayId) { closeTimePicker(); return }
+  const t = activeTrip(); if (!t) return
+  const day = t.days.find(d => d.id === dayId); if (!day) return
+  openTimePickerId = dayId
+  document.querySelectorAll('.time-chip.active').forEach(c => c.classList.remove('active'))
+  chipEl.classList.add('active')
+  const [h, m] = (day.departureTime || '09:00').split(':').map(Number)
+  const popup = $('time-popup')
+  popup.querySelector('.tp-h').textContent = String(h).padStart(2, '0')
+  popup.querySelector('.tp-m').textContent = String(m).padStart(2, '0')
+  const rect = chipEl.getBoundingClientRect()
+  popup.style.top  = (rect.bottom + 6) + 'px'
+  popup.style.left = Math.min(rect.left, window.innerWidth - 160) + 'px'
+  popup.classList.add('open')
+}
+
+function closeTimePicker() {
+  openTimePickerId = null
+  document.querySelectorAll('.time-chip.active').forEach(c => c.classList.remove('active'))
+  $('time-popup')?.classList.remove('open')
+}
+
+function stepTimePicker(field, delta) {
+  const dayId = openTimePickerId; if (!dayId) return
+  const t = activeTrip(); if (!t) return
+  const day = t.days.find(d => d.id === dayId); if (!day) return
+  const cur = day.departureTime || '09:00'
+  let [h, m] = cur.split(':').map(Number)
+  if (field === 'h') h = (h + delta + 24) % 24
+  else m = ((m + delta) % 60 + 60) % 60
+  const val = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`
+  $('time-popup').querySelector('.tp-h').textContent = String(h).padStart(2,'0')
+  $('time-popup').querySelector('.tp-m').textContent = String(m).padStart(2,'0')
+  setDeparture(dayId, val)
 }
 
 function setDeparture(dayId, val) {
@@ -1515,9 +1600,12 @@ function renderSidebar() {
         <div class="day-header">
           <div class="day-dot" style="background:${color}"></div>
           <div class="day-label">${esc(dayLabel)}</div>
-          <input type="time" class="time-input" value="${esc(day.departureTime||'')}"
-            title="Departure time"
-            onchange="setDeparture('${day.id}',this.value)">
+          <div class="time-chip ${openTimePickerId===day.id?'active':''}" id="tc-${day.id}"
+               title="Departure time"
+               onclick="event.stopPropagation(); toggleTimePicker('${day.id}', this)">
+            <span class="material-icons tc-icon">schedule</span>
+            <span class="tc-val ${day.departureTime ? '' : 'empty'}">${day.departureTime || '——'}</span>
+          </div>
           <button class="day-del" onclick="removeDay('${day.id}')"><span class="material-icons" style="font-size:16px">close</span></button>
         </div>
         ${stopsHtml}
