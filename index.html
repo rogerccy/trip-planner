@@ -705,7 +705,7 @@ window._mapLoaded = function() {
   renderMap()
   // Only recalc days whose leg cache is missing (not yet calculated or cache was cleared)
   const t = activeTrip()
-  if (t) t.days.forEach(day => { if (day._legs === null) recalcDay(day, t) })
+  if (t) t.days.forEach(day => { if (day._legs == null) recalcDay(day, t) })
 }
 
 function initMap() {
@@ -748,7 +748,7 @@ function renderTripSelect() {
     S.activeTripId = sel.value
     localStorage.setItem('tp_active', sel.value)
     renderSidebar(); renderHotels(); renderMap()
-    const nt = activeTrip(); if (nt && map) nt.days.forEach(day => { if (day._legs === null) recalcDay(day, nt) })
+    const nt = activeTrip(); if (nt && map) nt.days.forEach(day => { if (day._legs == null) recalcDay(day, nt) })
   }
 }
 
@@ -1687,7 +1687,7 @@ async function pullGist() {
       for (const t of DATA.trips) { if (!t.hotels) t.hotels = [] }
       save()
       renderTripSelect(); renderSidebar(); renderHotels(); renderMap()
-      if (map) { const at = activeTrip(); if (at) at.days.forEach(day => { if (day._legs === null) recalcDay(day, at) }) }
+      if (map) { const at = activeTrip(); if (at) at.days.forEach(day => { if (day._legs == null) recalcDay(day, at) }) }
       setStatus('Loaded from Gist ✓')
     } else {
       setStatus('Gist empty — using local data')
