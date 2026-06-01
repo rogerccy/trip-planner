@@ -650,12 +650,12 @@ function getEffectiveStops(day, dayIndex, trip) {
   // Guard dayIndex > 0 so Day 1 never gets a hotel prepended (no night "before Day 1")
   if (dayIndex > 0) {
     const prev = hotels.find(h => h.nights && h.nights.includes(dayIndex))
-    if (prev) eff.push({ ...prev, _virtual: true, _hotelId: prev.id, legMode: prev.legMode || 'DRIVE', dwellMinutes: 0 })
+    if (prev) eff.push({ ...prev, _virtual: true, _hotelId: prev.id, legMode: prev.legMode || 'TRANSIT', dwellMinutes: 0 })
   }
   for (const s of day.stops) eff.push(s)
   // Append: hotel staying tonight (night = dayIndex + 1, i.e. after this day)
   const next = hotels.find(h => h.nights && h.nights.includes(dayIndex + 1))
-  if (next) eff.push({ ...next, _virtual: true, _hotelId: next.id, legMode: next.legMode || 'DRIVE', dwellMinutes: 0 })
+  if (next) eff.push({ ...next, _virtual: true, _hotelId: next.id, legMode: next.legMode || 'TRANSIT', dwellMinutes: 0 })
   return eff
 }
 
@@ -872,7 +872,7 @@ function addStop(dayId, place) {
   day.stops.push({
     id: uid(), name: place.name, address: place.address,
     lat: place.lat, lng: place.lng, placeId: place.placeId,
-    legMode: 'DRIVE', transitModes: [], transitPref: '',
+    legMode: 'TRANSIT', transitModes: [], transitPref: '',
     dwellMinutes: 60, note: '',
     hours: place.hours || null,
     _expanded: false
@@ -1041,7 +1041,7 @@ function renderDetailPanel() {
     if (!fromStop || !toStop) return
     const leg = day._legs?.[legIdx]
     const isVirtual = fromStop._virtual
-    const mode = fromStop.legMode || 'DRIVE'
+    const mode = fromStop.legMode || 'TRANSIT'
     const modeData = MODES.find(m => m.id === mode) || MODES[0]
     const modes = isVirtual ? [] : (fromStop.transitModes || [])
     const pref  = isVirtual ? '' : (fromStop.transitPref  || '')
@@ -1134,7 +1134,7 @@ function addHotel(place) {
     lat: place.lat, lng: place.lng, placeId: place.placeId,
     phone: place.phone || '', note: '',
     hours: place.hours || null,
-    nights: [], legMode: 'DRIVE'
+    nights: [], legMode: 'TRANSIT'
   })
   renderHotels(); renderSidebar(); renderMap(); scheduleSave()
 }
@@ -1287,7 +1287,7 @@ async function calcAndRenderLeg(day, i, trip) {
   const a = eff[i], b = eff[i + 1]
   if (!a?.lat || !b?.lat) return
   if (!day._legs) day._legs = new Array(eff.length - 1).fill(null)
-  const mode = a.legMode || 'DRIVE'
+  const mode = a.legMode || 'TRANSIT'
   try {
     const body = {
       origin:      { location: { latLng: { latitude: a.lat, longitude: a.lng } } },
@@ -1579,7 +1579,7 @@ function renderSidebar() {
       // Leg row
       let legHtml = ''
       if (!isLast) {
-        const mode = stop.legMode || 'DRIVE'
+        const mode = stop.legMode || 'TRANSIT'
         const modeData = MODES.find(m => m.id === mode) || MODES[0]
         const isLegSelected = selectedPanel?.type === 'leg' && selectedPanel?.dayId === day.id && selectedPanel?.legIdx === si
 
